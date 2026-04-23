@@ -57,8 +57,8 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:3000:8080"
-    # volumes:
-    #   - open-webui:/app/backend/data
+    volumes:
+      - open-webui:/app/backend/data
     environment:
       - WEBUI_AUTH=false
       - OPENAI_API_BASE_URL=http://hermes:8642/v1
@@ -72,6 +72,6 @@ networks:
   hermes-net:
     driver: bridge
 
-# volumes:
-#   open-webui:
-#     name: open-webui
+volumes:
+  open-webui:
+    name: open-webui
