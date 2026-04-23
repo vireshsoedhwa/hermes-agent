@@ -1,0 +1,77 @@
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes
+    restart: unless-stopped
+    entrypoint: ["/bin/sh"]
+    command:
+      - -lc
+      - |
+          rm -f /opt/data/gateway.pid
+          exec /opt/hermes/docker/entrypoint.sh gateway run
+    ports:
+      - "8642:8642"
+    volumes:
+      - ~/.hermes:/opt/data
+    environment:
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
+    networks:
+      - hermes-net
+    # Uncomment to forward specific env vars instead of using .env file:
+    # environment:
+    #   - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    #   - OPENAI_API_KEY=${OPENAI_API_KEY}
+    #   - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+
+  dashboard:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-dashboard
+    restart: unless-stopped
+    command: dashboard --host 0.0.0.0 --insecure
+    ports:
+      - "127.0.0.1:9119:9119"
+    volumes:
+      - ~/.hermes:/opt/data
+    environment:
+      - GATEWAY_HEALTH_URL=http://hermes:8642
+    networks:
+      - hermes-net
+    depends_on:
+      - hermes
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:8080"
+    # volumes:
+    #   - open-webui:/app/backend/data
+    environment:
+      - WEBUI_AUTH=false
+      - OPENAI_API_BASE_URL=http://hermes:8642/v1
+      - OPENAI_API_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
+    networks:
+      - hermes-net
+    depends_on:
+      - hermes
+
+networks:
+  hermes-net:
+    driver: bridge
+
+# volumes:
+#   open-webui:
+#     name: open-webui
