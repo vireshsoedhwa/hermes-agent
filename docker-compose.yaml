@@ -3,20 +3,25 @@ services:
     image: nousresearch/hermes-agent:latest
     container_name: hermes
     restart: unless-stopped
-    entrypoint: ["/bin/sh"]
-    command:
-      - -lc
-      - |
-          rm -f /opt/data/gateway.pid
-          exec /opt/hermes/docker/entrypoint.sh gateway run
+    init: true
+    stop_grace_period: 15s
+    command: gateway run
     ports:
       - "8642:8642"
     volumes:
       - ~/.hermes:/opt/data
+      # - ~/work_repos:/opt/work_repos
+      # - ~/personal_repos:/opt/personal_repos
     environment:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
       - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8642/health', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - hermes-net
     # Uncomment to forward specific env vars instead of using .env file:
@@ -38,13 +43,14 @@ services:
     ports:
       - "127.0.0.1:9119:9119"
     volumes:
-      - ~/.hermes:/opt/data
+      - ~/.hermes:/opt/data:ro
     environment:
       - GATEWAY_HEALTH_URL=http://hermes:8642
     networks:
       - hermes-net
     depends_on:
-      - hermes
+      hermes:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -66,7 +72,8 @@ services:
     networks:
       - hermes-net
     depends_on:
-      - hermes
+      hermes:
+        condition: service_healthy
 
 networks:
   hermes-net:
