@@ -6,50 +6,45 @@ services:
     stop_grace_period: 15s
     command: gateway run
     ports:
-      - "127.0.0.1:8642:8642"
-      - "127.0.0.1:9119:9119"
+      - "8642:8642"   # gateway API
+      - "9119:9119"   # dashboard (only reached when HERMES_DASHBOARD=1)
     volumes:
       - ./hermes-data:/opt/data
     environment:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
       - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
-      - OPENAI_BASE_URL=http://192.168.1.124:1234/v1
-      - OPENAI_API_KEY=lm-studio
-      - HERMES_MODEL=qwen/qwen3.6-35b-a3b
       - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_TUI=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=9119
+      - GATEWAY_ALLOW_ALL_USERS=true
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8642/health', timeout=3)\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    networks:
-      - hermes-net
     deploy:
       resources:
         limits:
-          memory: 4G
-          cpus: "2.0"
+          memory: 8G
+          cpus: "4.0"
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: open-webui
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:8080"
+      - "3000:8080"
     volumes:
       - ./open-webui:/app/backend/data
     environment:
       - WEBUI_AUTH=false
       - OPENAI_API_BASE_URL=http://hermes:8642/v1
       - OPENAI_API_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
-    networks:
-      - hermes-net
     depends_on:
       hermes:
         condition: service_healthy
 
-networks:
-  hermes-net:
-    driver: bridge
+
