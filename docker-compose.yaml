@@ -14,7 +14,7 @@ services:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
       - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
-      - HERMES_DASHBOARD=0
+      - HERMES_DASHBOARD=1
       - HERMES_DASHBOARD_TUI=1
       - HERMES_DASHBOARD_HOST=0.0.0.0
       - HERMES_DASHBOARD_PORT=9119
@@ -33,18 +33,18 @@ services:
           memory: 8G
           cpus: "4.0"
 
-  open-webui:
-    image: ghcr.io/open-webui/open-webui:main
-    container_name: open-webui
-    restart: unless-stopped
-    ports:
-      - "3000:8080"
-    volumes:
-      - ./open-webui:/app/backend/data
-    environment:
-      - WEBUI_AUTH=false
-      - OPENAI_API_BASE_URL=http://hermes:8642/v1
-      - OPENAI_API_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
-    depends_on:
-      hermes:
-        condition: service_healthy
+  # open-webui:
+  #   image: ghcr.io/open-webui/open-webui:main
+  #   container_name: open-webui
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3000:8080"
+  #   volumes:
+  #     - ./open-webui:/app/backend/data
+  #   environment:
+  #     - WEBUI_AUTH=false
+  #     - OPENAI_API_BASE_URL=http://hermes:8642/v1
+  #     - OPENAI_API_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
+  #   depends_on:
+  #     hermes:
+  #       condition: service_healthy
