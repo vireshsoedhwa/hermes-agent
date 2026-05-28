@@ -2,9 +2,13 @@ services:
   hermes:
     image: nousresearch/hermes-agent:latest
     container_name: hermes
+    pull_policy: always
     restart: unless-stopped
     stop_grace_period: 15s
     command: gateway run
+    shm_size: "1gb"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8642:8642"   # gateway API
       - "9119:9119"   # dashboard (only reached when HERMES_DASHBOARD=1)
