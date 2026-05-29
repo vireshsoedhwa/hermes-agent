@@ -1,8 +1,10 @@
 services:
   hermes:
-    image: nousresearch/hermes-agent:latest
+    build:
+      context: ./hermes
+      pull: true
+    image: hermes-custom:latest
     container_name: hermes
-    pull_policy: always
     restart: unless-stopped
     stop_grace_period: 15s
     command: gateway run
@@ -14,7 +16,6 @@ services:
       - "9119:9119"   # dashboard
     volumes:
       - ./hermes-data:/opt/data
-      - ./notebooks:/workspace/notebooks
     environment:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
@@ -32,18 +33,9 @@ services:
 
       - GATEWAY_ALLOW_ALL_USERS=true
 
-      # Shared notebook path visible to both Hermes and Jupyter
-      - NOTEBOOK_DIR=/workspace/notebooks
-      - JUPYTER_URL=http://jupyter:8888
-      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-local-dev-token}
-
       # Browser automation
       - PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
       - AGENT_BROWSER_EXECUTABLE_PATH=/opt/hermes/.playwright/chromium_headless_shell-1223/chrome-linux/headless_shell
-
-    depends_on:
-      jupyter:
-        condition: service_healthy
 
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8642/health', timeout=3)\" || exit 1"]
@@ -73,22 +65,3 @@ services:
     depends_on:
       hermes:
         condition: service_healthy
-
-  jupyter:
-    build: ./jupyter
-    image: hermes-jupyter:latest
-    container_name: jupyter
-    restart: unless-stopped
-    ports:
-      - "8888:8888"
-    volumes:
-      - ./notebooks:/workspace/notebooks
-    environment:
-      - JUPYTER_TOKEN=${JUPYTER_TOKEN:-local-dev-token}
-    command: start-notebook.py --ServerApp.root_dir=/workspace/notebooks
-    healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import os, urllib.request; urllib.request.urlopen('http://localhost:8888/api/status?token=' + os.getenv('JUPYTER_TOKEN', 'local-dev-token'), timeout=3)\" || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
