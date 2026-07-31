@@ -3,7 +3,7 @@ services:
     build:
       context: ./hermes
       pull: true
-    image: hermes-custom:latest
+    image: nousresearch/hermes-agent:latest
     container_name: hermes
     restart: unless-stopped
     stop_grace_period: 15s
