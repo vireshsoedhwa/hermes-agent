@@ -1,9 +1,0 @@
-jupyterlab
-notebook
-ipykernel
-yfinance
-pandas
-numpy
-matplotlib
-seaborn
-setuptools
