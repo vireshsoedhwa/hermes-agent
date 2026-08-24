@@ -215,11 +215,15 @@ esac
 ok "Default model: $MODEL"
 
 # ---------------------------------------------------------------------------
-# Step 3 - API server key (generated, no input needed)
+# Step 3 - API server key and external access
 # ---------------------------------------------------------------------------
-step 'Secure the Hermes API'
-note 'This key protects the API on port 8642. Generating a strong one for you.'
+step 'API server key'
+note 'Hermes runs an OpenAI-compatible API on port 8642. The dashboard needs'
+note 'it internally, so it always runs — but it binds to 127.0.0.1 by default,'
+note 'meaning external apps cannot reach it. You can optionally expose it.'
+printf '\n'
 
+# Always generate a key — the gateway refuses to start the API server without one.
 API_KEY=''
 if command -v openssl >/dev/null 2>&1; then
     API_KEY=$(openssl rand -hex 32 2>/dev/null || true)
@@ -230,14 +234,23 @@ fi
 if [ -z "$API_KEY" ]; then
     warn 'Could not generate a key automatically.'
     while :; do
-        ask_secret 'Enter an API key of at least 8 characters (hidden): '
+        ask_secret 'Enter an API key of at least 16 characters (hidden): '
         API_KEY="$ANSWER"
-        [ "${#API_KEY}" -ge 8 ] && break
-        warn 'Too short - please use at least 8 characters.'
+        [ "${#API_KEY}" -ge 16 ] && break
+        warn 'Too short - please use at least 16 characters.'
     done
 fi
-ok "Generated a ${#API_KEY}-character key"
-note 'Use this value as the "API key" in OpenAI-compatible clients such as Open WebUI.'
+ok "Generated a ${#API_KEY}-character API server key"
+
+API_HOST=127.0.0.1
+if ask_yes_no 'Allow external apps to connect to the API on port 8642?' n; then
+    API_HOST=0.0.0.0
+    note 'External apps can reach http://localhost:8642/v1'
+    note 'Use the generated key as the "API key" in OpenAI-compatible clients.'
+else
+    note 'API server is loopback-only. The dashboard and CLI work normally.'
+    note 'Re-run ./setup.sh and answer yes here to expose it later.'
+fi
 
 # ---------------------------------------------------------------------------
 # Step 4 - Web search (optional)
@@ -353,7 +366,9 @@ emit_key() {
     printf '# Re-run ./setup.sh at any time to change these answers.\n'
     printf '# Reference for every supported option: .env.example\n\n'
 
-    printf '# --- API server -----------------------------------------------------\n'
+    printf '# --- API server (OpenAI-compatible endpoint on port 8642) -----------\n'
+    printf '# Loopback by default. Set HERMES_API_SERVER_HOST=0.0.0.0 to expose.\n'
+    emit_key HERMES_API_SERVER_HOST "$API_HOST"
     emit_key HERMES_API_SERVER_KEY "$API_KEY"
     printf '\n'
 
@@ -417,6 +432,11 @@ printf '%s  Setup complete%s\n' "$C_GREEN$C_BOLD" "$C_OFF"
 printf '%s================================================================%s\n\n' "$C_BOLD" "$C_OFF"
 printf '  Provider     %s\n' "$PROVIDER"
 printf '  Model        %s\n' "$MODEL"
+if [ "$API_HOST" = "0.0.0.0" ]; then
+    printf '  API server   port 8642 (external)\n'
+else
+    printf '  API server   port 8642 (loopback only)\n'
+fi
 printf '  Web search   %s\n' "${SEARCH_VAR:-none}"
 printf '  Chat         %s\n' "${CHAT_VAR:-dashboard only}"
 printf '  Data folder  %s\n' "$DATA_DIR"
@@ -437,7 +457,9 @@ if ask_yes_no 'Start Hermes now?' y; then
     if docker compose up -d; then
         printf '\n%sHermes is starting.%s\n\n' "$C_GREEN$C_BOLD" "$C_OFF"
         printf '  Dashboard  %shttp://localhost:9119%s\n' "$C_CYAN" "$C_OFF"
-        printf '  API        %shttp://localhost:8642/v1%s\n' "$C_CYAN" "$C_OFF"
+        if [ "$API_HOST" = "0.0.0.0" ]; then
+            printf '  API        %shttp://localhost:8642/v1%s\n' "$C_CYAN" "$C_OFF"
+        fi
         printf '  Logs       %sdocker compose logs -f%s\n' "$C_BOLD" "$C_OFF"
         printf '  Terminal   %sdocker exec -it hermes hermes%s\n\n' "$C_BOLD" "$C_OFF"
     else

@@ -127,33 +127,29 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3. API server key: required whenever the API server is enabled.
+# 3. API server key: always required (the dashboard needs the API server
+#    internally for cron fires, so it cannot be disabled).
 # ---------------------------------------------------------------------------
-API_ENABLED=$(value_of API_SERVER_ENABLED)
-case "$API_ENABLED" in
-    true|1|yes|on|TRUE|True)
-        API_KEY=$(value_of API_SERVER_KEY)
-        if [ -z "$API_KEY" ]; then
-            fail 'API_SERVER_ENABLED=true but API_SERVER_KEY is empty.'
-            hint 'Run ./setup.sh to generate one automatically.'
-        elif [ "$API_KEY" = 'local-dev-key' ] || [ "$API_KEY" = 'change-me' ]; then
-            fail "API_SERVER_KEY is still the placeholder '$API_KEY'."
-            hint 'Run ./setup.sh to generate a real one automatically.'
-        elif [ "${#API_KEY}" -lt 8 ]; then
-            fail "API_SERVER_KEY is too short (${#API_KEY} chars); Hermes requires at least 8."
-            hint 'Run ./setup.sh to generate one automatically.'
-        else
-            pass "API server key is set (${#API_KEY} chars)"
-        fi
+API_KEY=$(value_of API_SERVER_KEY)
+if [ -z "$API_KEY" ]; then
+    fail 'HERMES_API_SERVER_KEY is empty. The API server refuses to start without it.'
+    hint 'Run ./setup.sh to generate one automatically.'
+elif [ "$API_KEY" = 'local-dev-key' ] || [ "$API_KEY" = 'change-me' ]; then
+    fail "API_SERVER_KEY is still the placeholder '$API_KEY'."
+    hint 'Run ./setup.sh to generate a real one automatically.'
+elif [ "${#API_KEY}" -lt 16 ]; then
+    fail "API_SERVER_KEY is too short (${#API_KEY} chars); the gateway requires at least 16."
+    hint 'Run ./setup.sh to generate one automatically.'
+else
+    pass "API server key is set (${#API_KEY} chars)"
+fi
 
-        if [ "$(value_of API_SERVER_HOST)" = '0.0.0.0' ]; then
-            warn 'API_SERVER_HOST=0.0.0.0 exposes the API beyond the container. Keep API_SERVER_KEY secret.'
-        fi
-        ;;
-    *)
-        pass 'API server disabled (no API_SERVER_KEY needed)'
-        ;;
-esac
+API_HOST=$(value_of API_SERVER_HOST)
+if [ "$API_HOST" = '0.0.0.0' ]; then
+    warn 'API_SERVER_HOST=0.0.0.0 exposes the API beyond the container. Keep HERMES_API_SERVER_KEY secret.'
+else
+    pass 'API server bound to loopback (default) — not reachable from the host'
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Gateway authorization sanity check.
@@ -201,7 +197,7 @@ done
 if [ -n "$MESSAGING" ]; then
     pass "Messaging platform configured:$MESSAGING"
 else
-    warn 'No messaging platform token set; reach Hermes via the dashboard, API server, or docker exec.'
+    warn 'No messaging platform token set; reach Hermes via the dashboard on port 9119 or docker exec.'
 fi
 
 if is_set ELEVENLABS_API_KEY || is_set GROQ_API_KEY; then

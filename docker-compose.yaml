@@ -11,8 +11,7 @@ services:
       - ${HERMES_DATA_DIR:-./hermes-data}:/data
     environment:
       # Mirrors the hermes service so both see an identical configuration.
-      - API_SERVER_ENABLED=true
-      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_HOST=${HERMES_API_SERVER_HOST:-127.0.0.1}
       - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-}
       - GATEWAY_ALLOW_ALL_USERS=true
       - HERMES_INFERENCE_PROVIDER=${HERMES_INFERENCE_PROVIDER:-ollama-cloud}
@@ -49,14 +48,16 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
-      - "8642:8642"   # gateway API
+      # Loopback-only by default; set HERMES_API_SERVER_HOST=0.0.0.0 to expose.
+      - "8642:8642"   # OpenAI-compatible API (loopback by default)
       - "9119:9119"   # dashboard
     volumes:
       - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
     environment:
-      - API_SERVER_ENABLED=true
-      - API_SERVER_HOST=0.0.0.0
-      # Validated by the preflight service, which prints actionable guidance.
+      # The API server always runs (the dashboard needs it for cron fires).
+      # It binds to 127.0.0.1 by default — internal only. Set
+      # HERMES_API_SERVER_HOST=0.0.0.0 in .env to expose port 8642 externally.
+      - API_SERVER_HOST=${HERMES_API_SERVER_HOST:-127.0.0.1}
       - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-}
 
       - HERMES_DASHBOARD=1
@@ -90,8 +91,12 @@ services:
       - HERMES_UID=${HERMES_UID:-10000}
       - HERMES_GID=${HERMES_GID:-10000}
 
+    # Asks the s6 supervisor directly whether the gateway is up.
+    # Note that s6-svstat exits 0 even when a service is down, so the 'up'
+    # match is what actually gates it. /command is not on the exec PATH,
+    # hence the absolute path.
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8642/health"]
+      test: ["CMD-SHELL", "/command/s6-svstat /run/service/gateway-default | grep -q '^up'"]
       interval: 10s
       timeout: 5s
       retries: 5

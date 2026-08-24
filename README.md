@@ -28,7 +28,7 @@ The only thing you need to bring is **one API key from a model provider**. [Olla
 | --- | --- | --- |
 | 1 | Which model provider? | Menu of 8, with a link to get the key |
 | 2 | Which model? | Suggestions for your provider, or type your own |
-| 3 | — | API key generated for you, nothing to answer |
+| 3 | Allow external API access? | Loopback by default; say yes for Open WebUI etc. |
 | 4 | Web search? | Optional, skippable |
 | 5 | Chat platform? | Optional — Telegram, Discord, Slack, or skip |
 | 6 | Where to store data? | Defaults to `./hermes-data` |
@@ -46,7 +46,7 @@ Docker Desktop (macOS/Windows) or Docker Engine + Compose v2 (Linux). Nothing el
 | What | Required? | Where to get it |
 | --- | --- | --- |
 | **An LLM provider key** | **Yes** | [Ollama Cloud](https://ollama.com/settings/keys), [OpenRouter](https://openrouter.ai/keys), [Anthropic](https://console.anthropic.com/settings/keys), [OpenAI](https://platform.openai.com/api-keys), [Gemini](https://aistudio.google.com/app/apikey), [Groq](https://console.groq.com/keys), [DeepSeek](https://platform.deepseek.com/api_keys), or [xAI](https://console.x.ai) |
-| **API server key** | **Yes** | Generated for you by `./setup.sh` |
+| **API server key** | **Yes** | Generated for you by `./setup.sh` (always required) |
 | **Web search key** | Optional | [Brave](https://brave.com/search/api/) (free tier), [Tavily](https://app.tavily.com/home), or [Exa](https://exa.ai) — without one the agent cannot search the web |
 | **Voice / transcription** | Optional | [ElevenLabs](https://elevenlabs.io) for speech output; a Groq key also enables Whisper transcription |
 | **Chat platform token** | Optional | [Telegram](https://t.me/BotFather), [Discord](https://discord.com/developers/applications), or [Slack](https://api.slack.com/apps) — without one, use the dashboard, the API, or `docker exec` |
@@ -77,7 +77,7 @@ It **fails the startup** when:
 
 - No LLM provider key is set at all
 - `HERMES_INFERENCE_PROVIDER` points at a provider whose key is missing
-- `API_SERVER_KEY` is empty, still a placeholder, or shorter than 8 characters
+- The API server key is empty, a placeholder, or under 16 characters
 - The shared data directory is missing or not writable by the container
 
 It **warns but continues** for missing optional capabilities and for insecure-but-intentional settings. Every failure message names the fix, usually `./setup.sh`.
@@ -124,10 +124,20 @@ docker compose ps                 # health status
 | URL | What |
 | --- | --- |
 | http://localhost:9119 | Web dashboard — chat, config, sessions, skills, logs |
-| http://localhost:8642/v1 | OpenAI-compatible API. Use `HERMES_API_SERVER_KEY` as the API key |
-| http://localhost:8642/health | Health endpoint used by the container healthcheck |
+| http://localhost:8642/v1 | OpenAI-compatible API — **loopback by default**, see below |
 
-Because the API is OpenAI-compatible, you can point Open WebUI, LibreChat, or any OpenAI SDK at it.
+### Connecting other apps (optional)
+
+The API server always runs — the dashboard needs it internally. By default it binds to `127.0.0.1` inside the container, so port 8642 is published but not reachable from the host.
+
+To let external apps (Open WebUI, LibreChat, any OpenAI SDK) connect, say yes during `./setup.sh`, or set it directly:
+
+```bash
+HERMES_API_SERVER_HOST=0.0.0.0
+HERMES_API_SERVER_KEY=<at least 16 chars>
+```
+
+Then `docker compose up -d`. Use `HERMES_API_SERVER_KEY` as the API key in the client.
 
 ---
 
@@ -157,7 +167,15 @@ echo "HERMES_GID=$(id -g)" >> .env
 docker compose up -d
 ```
 
-**Container is `unhealthy`.** The healthcheck polls `/health` on port 8642, which only responds when the API server is up. Check `docker compose logs hermes` for a provider authentication error — an invalid API key is the usual cause.
+**Container is `unhealthy`.** The healthcheck asks the s6 supervisor whether the gateway is up. Inspect it directly:
+
+```bash
+docker exec hermes /command/s6-svstat /run/service/gateway-default
+```
+
+Anything other than `up` means the gateway is crashing — check `docker compose logs hermes`. A provider authentication error from an invalid key is the usual cause.
+
+**`/v1` requests are refused.** The API server is bound to loopback by default. Set `HERMES_API_SERVER_HOST=0.0.0.0` (see [Connecting other apps](#connecting-other-apps-optional)).
 
 **Port already in use.** Change the host side of the mapping in `docker-compose.yaml`, e.g. `"9120:9119"`.
 
@@ -170,8 +188,8 @@ docker compose up -d
 This compose file is tuned for **local, single-user use**:
 
 - `GATEWAY_ALLOW_ALL_USERS=true` authorizes every user with no allowlist.
-- `API_SERVER_HOST=0.0.0.0` exposes the API on your published port.
 - The dashboard binds `0.0.0.0` so `localhost:9119` is reachable.
+- The API server binds to `127.0.0.1` by default. Setting `HERMES_API_SERVER_HOST=0.0.0.0` exposes it on the published port — keep `HERMES_API_SERVER_KEY` secret.
 
 Hermes can run terminal commands. Before exposing any of this beyond your own machine, read the [security guide](https://hermes-agent.nousresearch.com/docs/user-guide/security), set `GATEWAY_ALLOW_ALL_USERS=false` with an explicit allowlist, and put a [dashboard auth provider](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) in front of the UI.
 
