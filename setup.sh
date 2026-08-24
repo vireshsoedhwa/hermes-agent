@@ -165,7 +165,7 @@ ask_choice 8
 
 case "$CHOICE" in
     1) PROVIDER=ollama-cloud; KEY_VAR=OLLAMA_API_KEY;     KEY_URL='https://ollama.com/settings/keys'
-       MODEL_1='ollama-cloud/gemma4:31b-cloud'; MODEL_2='ollama-cloud/gpt-oss:120b'; MODEL_3='ollama-cloud/glm-5.2' ;;
+       MODEL_1='gemma4:31b'; MODEL_2='gpt-oss:120b'; MODEL_3='glm-5.2' ;;
     2) PROVIDER=openrouter;   KEY_VAR=OPENROUTER_API_KEY; KEY_URL='https://openrouter.ai/keys'
        MODEL_1='anthropic/claude-sonnet-4.6'; MODEL_2='openai/gpt-5.5'; MODEL_3='google/gemini-2.5-flash' ;;
     3) PROVIDER=anthropic;    KEY_VAR=ANTHROPIC_API_KEY;  KEY_URL='https://console.anthropic.com/settings/keys'

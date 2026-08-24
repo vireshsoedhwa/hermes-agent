@@ -15,7 +15,7 @@ services:
       - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-}
       - GATEWAY_ALLOW_ALL_USERS=true
       - HERMES_INFERENCE_PROVIDER=${HERMES_INFERENCE_PROVIDER:-ollama-cloud}
-      - HERMES_DEFAULT_MODEL=${HERMES_DEFAULT_MODEL:-ollama-cloud/gemma4:31b-cloud}
+      - HERMES_DEFAULT_MODEL=${HERMES_DEFAULT_MODEL:-gemma4:31b}
       # LLM providers — at least one must be set.
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
@@ -63,7 +63,7 @@ services:
       - HERMES_DASHBOARD=1
 
       - HERMES_INFERENCE_PROVIDER=${HERMES_INFERENCE_PROVIDER:-ollama-cloud}
-      - HERMES_DEFAULT_MODEL=${HERMES_DEFAULT_MODEL:-ollama-cloud/gemma4:31b-cloud}
+      - HERMES_DEFAULT_MODEL=${HERMES_DEFAULT_MODEL:-gemma4:31b}
 
       # LLM providers — at least one must be set (enforced by preflight).
       - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}

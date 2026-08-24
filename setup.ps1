@@ -146,7 +146,7 @@ $choice = Ask-Choice 8
 
 $providers = @{
     1 = @{ Provider='ollama-cloud'; KeyVar='OLLAMA_API_KEY';     KeyUrl='https://ollama.com/settings/keys'
-           Models=@('ollama-cloud/gemma4:31b-cloud','ollama-cloud/gpt-oss:120b','ollama-cloud/glm-5.2') }
+           Models=@('gemma4:31b','gpt-oss:120b','glm-5.2') }
     2 = @{ Provider='openrouter';   KeyVar='OPENROUTER_API_KEY'; KeyUrl='https://openrouter.ai/keys'
            Models=@('anthropic/claude-sonnet-4.6','openai/gpt-5.5','google/gemini-2.5-flash') }
     3 = @{ Provider='anthropic';    KeyVar='ANTHROPIC_API_KEY';  KeyUrl='https://console.anthropic.com/settings/keys'
