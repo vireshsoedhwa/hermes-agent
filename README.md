@@ -114,6 +114,8 @@ docker compose up -d              # start (runs preflight first)
 docker compose logs -f            # follow logs
 docker compose down               # stop
 docker compose pull && docker compose up -d   # upgrade to the latest image
+./reset.sh                        # clear all data, keep .env
+./reset.sh --full                 # clear all data AND delete .env
 
 docker exec -it hermes hermes     # interactive chat in your terminal
 docker compose ps                 # health status
