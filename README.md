@@ -30,6 +30,8 @@ That's it. The wizard walks you through six short steps, then offers to start He
 
 **http://localhost:9119**
 
+Log in with the credentials shown at the end of the wizard (username `admin`, auto-generated password).
+
 The only thing you need to bring is **one API key from a model provider**. [Ollama Cloud](https://ollama.com/settings/keys) is the easiest place to start — hosted open models, no GPU, free tier — and the wizard links you straight to the signup page for whichever provider you pick.
 
 ### What the wizard asks
@@ -38,7 +40,7 @@ The only thing you need to bring is **one API key from a model provider**. [Olla
 | --- | --- | --- |
 | 1 | Which model provider? | Menu of 8, with a link to get the key |
 | 2 | Which model? | Suggestions for your provider, or type your own |
-| 3 | — | API key generated for you, nothing to answer |
+| 3 | — | API key + dashboard password generated for you |
 | 4 | Web search? | Optional, skippable |
 | 5 | Chat platform? | Optional — Telegram, Discord, Slack, or skip |
 | 6 | Where to store data? | Defaults to `./hermes-data` |
@@ -69,7 +71,7 @@ Docker Desktop includes everything you need (Engine + Compose). On Linux, instal
 | What | Required? | Where to get it |
 | --- | --- | --- |
 | **An LLM provider key** | **Yes** | [Ollama Cloud](https://ollama.com/settings/keys), [OpenRouter](https://openrouter.ai/keys), [Anthropic](https://console.anthropic.com/settings/keys), [OpenAI](https://platform.openai.com/api-keys), [Gemini](https://aistudio.google.com/app/apikey), [Groq](https://console.groq.com/keys), [DeepSeek](https://platform.deepseek.com/api_keys), or [xAI](https://console.x.ai) |
-| **API server key** | **Yes** | Generated for you by `./setup.sh` (always required) |
+| **Dashboard password** | **Yes** | Generated for you by `./setup.sh` (required for web UI login) |
 | **Web search key** | Optional | [Brave](https://brave.com/search/api/) (free tier), [Tavily](https://app.tavily.com/home), or [Exa](https://exa.ai) — without one the agent cannot search the web |
 | **Voice / transcription** | Optional | [ElevenLabs](https://elevenlabs.io) for speech output; a Groq key also enables Whisper transcription |
 | **Chat platform token** | Optional | [Telegram](https://t.me/BotFather), [Discord](https://discord.com/developers/applications), or [Slack](https://api.slack.com/apps) — without one, use the dashboard, the API, or `docker exec` |
