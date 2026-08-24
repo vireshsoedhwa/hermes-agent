@@ -43,7 +43,7 @@ The only thing you need to bring is **one API key from a model provider**. [Olla
 | 5 | Chat platform? | Optional — Telegram, Discord, Slack, or skip |
 | 6 | Where to store data? | Defaults to `./hermes-data` |
 
-Keys are hidden as you paste them and echoed back masked (`****3456`) so you can confirm. Re-run `./setup.sh` any time to change your answers; your previous `.env` is backed up with a timestamp.
+Keys are hidden as you paste them and echoed back masked (`****3456`) so you can confirm. Re-run the setup wizard any time (`./setup.sh` or `.\setup.cmd`) to change your answers; your previous `.env` is backed up with a timestamp.
 
 Prefer to configure by hand? `cp .env.example .env` and edit — every option is documented there.
 
@@ -51,7 +51,20 @@ Prefer to configure by hand? `cp .env.example .env` and edit — every option is
 
 ## Prerequisites
 
-Docker Desktop (macOS/Windows) or Docker Engine + Compose v2 (Linux). Nothing else — no Python, no Node, no local model runtime.
+### Software
+
+You need **Git** and **Docker**. Nothing else — no Python, no Node, no local model runtime.
+
+| Tool | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| **Git** | [git-scm.com](https://git-scm.com/downloads) or `brew install git` | [git-scm.com](https://git-scm.com/downloads) (includes Git Bash) | `apt install git` / `dnf install git` |
+| **Docker** | [Docker Desktop](https://docker.com) | [Docker Desktop](https://docker.com) (includes Compose v2) | [Docker Engine](https://docs.docker.com/engine/install/) + [Compose v2](https://docs.docker.com/compose/install/) |
+
+Docker Desktop includes everything you need (Engine + Compose). On Linux, install both Engine and the Compose plugin separately.
+
+**Windows users:** PowerShell 5.1 is pre-installed on Windows 10/11 — nothing extra to install. The `setup.cmd` dispatcher handles execution policy automatically.
+
+### API keys
 
 | What | Required? | Where to get it |
 | --- | --- | --- |
@@ -61,7 +74,7 @@ Docker Desktop (macOS/Windows) or Docker Engine + Compose v2 (Linux). Nothing el
 | **Voice / transcription** | Optional | [ElevenLabs](https://elevenlabs.io) for speech output; a Groq key also enables Whisper transcription |
 | **Chat platform token** | Optional | [Telegram](https://t.me/BotFather), [Discord](https://discord.com/developers/applications), or [Slack](https://api.slack.com/apps) — without one, use the dashboard, the API, or `docker exec` |
 
-Everything optional can be added later by re-running `./setup.sh`.
+Everything optional can be added later by re-running the setup wizard (`./setup.sh` or `.\setup.cmd`).
 
 ---
 
@@ -140,6 +153,7 @@ docker compose ps                 # health status
 docker compose up -d              # start (runs preflight first)
 docker compose logs -f            # follow logs
 docker compose down               # stop
+docker compose pull && docker compose up -d   # upgrade to the latest image
 .\reset.cmd                       # clear all data, keep .env
 .\reset.cmd -Full                 # clear all data AND delete .env
 
@@ -158,7 +172,7 @@ docker compose ps                 # health status
 
 The API server always runs — the dashboard needs it internally. By default it binds to `127.0.0.1` inside the container, so port 8642 is published but not reachable from the host.
 
-To let external apps (Open WebUI, LibreChat, any OpenAI SDK) connect, say yes during `./setup.sh`, or set it directly:
+To let external apps (Open WebUI, LibreChat, any OpenAI SDK) connect, set `HERMES_API_SERVER_HOST=0.0.0.0` in `.env`:
 
 ```bash
 HERMES_API_SERVER_HOST=0.0.0.0
