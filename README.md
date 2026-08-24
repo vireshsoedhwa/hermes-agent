@@ -10,10 +10,20 @@ No config files to edit. A guided setup asks a few questions, writes your config
 
 ## Quick start
 
+**macOS / Linux:**
+
 ```bash
 git clone <this-repo> hermes-agent
 cd hermes-agent
 ./setup.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+git clone <this-repo> hermes-agent
+cd hermes-agent
+.\setup.cmd
 ```
 
 That's it. The wizard walks you through six short steps, then offers to start Hermes. When it finishes, open the dashboard:
@@ -108,6 +118,8 @@ HERMES_DATA_DIR=/Users/you/Documents/hermes-data
 
 ## Everyday commands
 
+**macOS / Linux:**
+
 ```bash
 ./setup.sh                        # guided setup / reconfigure
 docker compose up -d              # start (runs preflight first)
@@ -116,6 +128,20 @@ docker compose down               # stop
 docker compose pull && docker compose up -d   # upgrade to the latest image
 ./reset.sh                        # clear all data, keep .env
 ./reset.sh --full                 # clear all data AND delete .env
+
+docker exec -it hermes hermes     # interactive chat in your terminal
+docker compose ps                 # health status
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\setup.cmd                       # guided setup / reconfigure
+docker compose up -d              # start (runs preflight first)
+docker compose logs -f            # follow logs
+docker compose down               # stop
+.\reset.cmd                       # clear all data, keep .env
+.\reset.cmd -Full                 # clear all data AND delete .env
 
 docker exec -it hermes hermes     # interactive chat in your terminal
 docker compose ps                 # health status
@@ -159,7 +185,9 @@ Whichever you choose, the provider must match a key you have set — preflight s
 
 **Preflight fails and Hermes never starts.** Working as intended. Run `./setup.sh` — it fixes every condition preflight checks for.
 
-**`./setup.sh: Permission denied`.** Run `chmod +x setup.sh` first, or invoke it as `sh setup.sh`.
+**`./setup.sh: Permission denied` (macOS/Linux).** Run `chmod +x setup.sh` first, or invoke it as `sh setup.sh`.
+
+**`setup.ps1 cannot be loaded because running scripts is disabled` (Windows).** The `setup.cmd` dispatcher bypasses this automatically. If you run `setup.ps1` directly, use `powershell -ExecutionPolicy Bypass -File setup.ps1`.
 
 **Permission denied writing to the data folder (Linux).** The container runs as UID 10000, which cannot write to a folder owned by you. `./setup.sh` detects Linux and sets this automatically; to fix it manually:
 

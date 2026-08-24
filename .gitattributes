@@ -1,0 +1,20 @@
+# Ensure shell scripts keep LF line endings on all platforms.
+# Without this, Windows users with core.autocrlf=true get CRLF in .sh files,
+# which breaks them inside the Alpine preflight container.
+*.sh           text eol=lf
+*.ps1          text eol=lf
+*.cmd          text eol=crlf
+
+# Docker files also need LF.
+*.yaml         text eol=lf
+*.yml          text eol=lf
+Dockerfile*    text eol=lf
+
+# .env.example must be LF for docker-compose interpolation consistency.
+.env.example   text eol=lf
+.env           text eol=lf
+
+# Binary files — no line ending conversion.
+*.png          binary
+*.jpg          binary
+*.ico          binary
