@@ -92,7 +92,7 @@ Hermes Agent preflight
 ----------------------
   OK    LLM provider credential found: OLLAMA_API_KEY
   OK    Provider 'ollama-cloud' has its credential (OLLAMA_API_KEY)
-  OK    Default model: ollama-cloud/gemma4:31b-cloud
+  OK    Default model: gpt-oss:120b
   OK    API server key is set (64 chars)
   OK    Data directory is mounted and writable
   WARN  No web search key set; web search will be limited.
@@ -192,9 +192,9 @@ Then `docker compose up -d`. Use `HERMES_API_SERVER_KEY` as the API key in the c
 
 Three ways, easiest first:
 
-1. **`/model` in the dashboard chat** — switch for the current session, no restart.
-2. **`./setup.sh`** — pick a new provider and model, then it restarts for you.
-3. **Edit `.env`** and run `docker compose up -d`.
+1. **Dashboard** — open http://localhost:9119, browse available models, and switch with one click. This is the recommended way.
+2. **`/model` in chat** — switch for the current session, no restart.
+3. **Edit `.env`** — set `HERMES_DEFAULT_MODEL` and run `docker compose up -d`.
 
 Whichever you choose, the provider must match a key you have set — preflight stops you if they do not line up.
 
@@ -228,7 +228,7 @@ Anything other than `up` means the gateway is crashing — check `docker compose
 
 **Port already in use.** Change the host side of the mapping in `docker-compose.yaml`, e.g. `"9120:9119"`.
 
-**Agent cannot browse the web.** No search key is configured. Re-run `./setup.sh` and pick Brave at step 4 (free tier).
+**Agent cannot browse the web.** No search key is configured. Re-run `./setup.sh` and pick Brave at step 3 (free tier).
 
 ---
 

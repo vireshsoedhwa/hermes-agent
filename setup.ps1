@@ -16,7 +16,7 @@ $ExampleFile = '.env.example'
 # Presentation helpers
 # ---------------------------------------------------------------------------
 $script:StepNum = 0
-$TotalSteps = 6
+$TotalSteps = 5
 
 function Write-Step($title) {
     $script:StepNum++
