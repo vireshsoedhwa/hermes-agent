@@ -64,6 +64,8 @@ You need **Git** and **Docker**. Nothing else — no Python, no Node, no local m
 
 Docker Desktop includes everything you need (Engine + Compose). On Linux, install both Engine and the Compose plugin separately.
 
+**Install Docker before running setup.** The setup wizard uses Docker to generate a dashboard password hash, so it will exit early if Docker isn't on your PATH.
+
 **Windows users:** PowerShell 5.1 is pre-installed on Windows 10/11 — nothing extra to install. The `setup.cmd` dispatcher handles execution policy automatically.
 
 ### API keys

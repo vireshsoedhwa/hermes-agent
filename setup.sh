@@ -125,6 +125,13 @@ note 'Press Enter to accept the [default] shown in brackets.'
 
 [ -f "$EXAMPLE_FILE" ] || die "$EXAMPLE_FILE not found. Run this from the repository root."
 
+if ! command -v docker >/dev/null 2>&1; then
+    printf '\n'
+    die 'Docker is required but was not found on your PATH.
+
+    Install Docker Desktop from https://docker.com, then re-run ./setup.sh'
+fi
+
 if [ -f "$ENV_FILE" ]; then
     printf '\n'
     warn "An existing $ENV_FILE was found."
@@ -496,14 +503,6 @@ printf '  Login       %sadmin / %s%s\n' "$C_BOLD" "$DASH_PASS" "$C_OFF"
 printf '  Web search   %s\n' "${SEARCH_VAR:-none}"
 printf '  Chat         %s\n' "${CHAT_VAR:-dashboard only}"
 printf '  Data folder  %s\n' "$DATA_DIR"
-
-if ! command -v docker >/dev/null 2>&1; then
-    printf '\n'
-    warn 'Docker was not found on your PATH.'
-    note 'Install Docker Desktop from https://docker.com, then run: docker compose up -d'
-    printf '\n'
-    exit 0
-fi
 
 printf '\n'
 if ask_yes_no 'Start Hermes now?' y; then

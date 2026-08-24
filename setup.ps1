@@ -101,6 +101,14 @@ if (-not (Test-Path $ExampleFile)) {
     Write-Err "$ExampleFile not found. Run this from the repository root."
 }
 
+$dockerCheck = Get-Command docker -ErrorAction SilentlyContinue
+if (-not $dockerCheck) {
+    Write-Host ""
+    Write-Err 'Docker is required but was not found on your PATH.
+
+    Install Docker Desktop from https://docker.com, then re-run .\setup.cmd'
+}
+
 if (Test-Path $EnvFile) {
     Write-Host ""
     Write-Warn "An existing $EnvFile was found."
@@ -470,15 +478,6 @@ Write-Host "  Login       admin / $DASH_PASS" -ForegroundColor White
 Write-Host "  Web search   $(if ($SEARCH_VAR) { $SEARCH_VAR } else { 'none' })"
 Write-Host "  Chat         $(if ($CHAT_VAR) { $CHAT_VAR } else { 'dashboard only' })"
 Write-Host "  Data folder  $DATA_DIR"
-
-$dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
-if (-not $dockerCmd) {
-    Write-Host ""
-    Write-Warn 'Docker was not found on your PATH.'
-    Write-Note 'Install Docker Desktop from https://docker.com, then run: docker compose up -d'
-    Write-Host ""
-    exit 0
-}
 
 Write-Host ""
 if (Ask-YesNo 'Start Hermes now?' 'y') {
