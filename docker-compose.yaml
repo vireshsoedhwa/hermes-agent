@@ -1,13 +1,50 @@
 services:
+  # Validates that all prerequisites are met before Hermes is allowed to start.
+  # Exits non-zero on a missing requirement, which blocks the `hermes` service.
+  preflight:
+    image: alpine:3.22
+    container_name: hermes-preflight
+    entrypoint: ["/bin/sh", "/scripts/preflight.sh"]
+    restart: "no"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ${HERMES_DATA_DIR:-./hermes-data}:/data
+    environment:
+      # Mirrors the hermes service so both see an identical configuration.
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-}
+      - GATEWAY_ALLOW_ALL_USERS=true
+      - HERMES_INFERENCE_PROVIDER=${HERMES_INFERENCE_PROVIDER:-ollama-cloud}
+      - HERMES_DEFAULT_MODEL=${HERMES_DEFAULT_MODEL:-ollama-cloud/gemma4:31b-cloud}
+      # LLM providers — at least one must be set.
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+      # Optional capabilities — warnings only.
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - EXA_API_KEY=${EXA_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+
   hermes:
-    build:
-      context: ./hermes
-      pull: true
     image: nousresearch/hermes-agent:latest
+    pull_policy: always
     container_name: hermes
     restart: unless-stopped
     stop_grace_period: 15s
     command: gateway run
+    depends_on:
+      preflight:
+        condition: service_completed_successfully
     shm_size: "4gb"
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -15,30 +52,46 @@ services:
       - "8642:8642"   # gateway API
       - "9119:9119"   # dashboard
     volumes:
-      - ./hermes-data:/opt/data
+      - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
     environment:
       - API_SERVER_ENABLED=true
       - API_SERVER_HOST=0.0.0.0
-      - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-local-dev-key}
+      # Validated by the preflight service, which prints actionable guidance.
+      - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-}
 
       - HERMES_DASHBOARD=1
-      - HERMES_DASHBOARD_TUI=1
-      - HERMES_DASHBOARD_HOST=0.0.0.0
-      - HERMES_DASHBOARD_PORT=9119
 
-      - HERMES_INFERENCE_PROVIDER=ollama-cloud
-      - HERMES_DEFAULT_MODEL=ollama-cloud/gemma4:31b-cloud
-      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
-      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY}
+      - HERMES_INFERENCE_PROVIDER=${HERMES_INFERENCE_PROVIDER:-ollama-cloud}
+      - HERMES_DEFAULT_MODEL=${HERMES_DEFAULT_MODEL:-ollama-cloud/gemma4:31b-cloud}
+
+      # LLM providers — at least one must be set (enforced by preflight).
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+
+      # Optional capabilities.
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - EXA_API_KEY=${EXA_API_KEY:-}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
 
       - GATEWAY_ALLOW_ALL_USERS=true
 
-      # Browser automation
-      - PLAYWRIGHT_BROWSERS_PATH=/opt/hermes/.playwright
-      - AGENT_BROWSER_EXECUTABLE_PATH=/opt/hermes/.playwright/chromium_headless_shell-1223/chrome-linux/headless_shell
+      # On Linux, set these in .env to match your host user so files written
+      # into the shared data folder stay editable: HERMES_UID=$(id -u)
+      - HERMES_UID=${HERMES_UID:-10000}
+      - HERMES_GID=${HERMES_GID:-10000}
 
     healthcheck:
-      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8642/health', timeout=3)\" || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8642/health"]
       interval: 10s
       timeout: 5s
       retries: 5

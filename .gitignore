@@ -1,5 +1,13 @@
-hermes-data
+# Runtime data — everything Hermes owns. Keep the directory, ignore contents so
+# the bind mount target exists on a fresh clone with correct ownership.
+hermes-data/*
+!hermes-data/.gitkeep
+
 open-webui
 notebooks
+
+# Local secrets. .env.example IS committed; .env and its backups never are.
 .env
+.env.backup.*
+
 .DS_Store
