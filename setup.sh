@@ -165,22 +165,23 @@ ask_choice 8
 
 case "$CHOICE" in
     1) PROVIDER=ollama-cloud; KEY_VAR=OLLAMA_API_KEY;     KEY_URL='https://ollama.com/settings/keys'
-       MODEL_1='gemma4:31b'; MODEL_2='gpt-oss:120b'; MODEL_3='glm-5.2' ;;
+       DEFAULT_MODEL='gpt-oss:120b' ;;
     2) PROVIDER=openrouter;   KEY_VAR=OPENROUTER_API_KEY; KEY_URL='https://openrouter.ai/keys'
-       MODEL_1='anthropic/claude-sonnet-4.6'; MODEL_2='openai/gpt-5.5'; MODEL_3='google/gemini-2.5-flash' ;;
+       DEFAULT_MODEL='anthropic/claude-sonnet-4.6' ;;
     3) PROVIDER=anthropic;    KEY_VAR=ANTHROPIC_API_KEY;  KEY_URL='https://console.anthropic.com/settings/keys'
-       MODEL_1='claude-sonnet-4-6'; MODEL_2='claude-opus-4-1'; MODEL_3='claude-haiku-4-5' ;;
+       DEFAULT_MODEL='claude-sonnet-4-6' ;;
     4) PROVIDER=openai;       KEY_VAR=OPENAI_API_KEY;     KEY_URL='https://platform.openai.com/api-keys'
-       MODEL_1='gpt-5.5'; MODEL_2='gpt-4o'; MODEL_3='gpt-4o-mini' ;;
+       DEFAULT_MODEL='gpt-5.5' ;;
     5) PROVIDER=gemini;       KEY_VAR=GOOGLE_API_KEY;     KEY_URL='https://aistudio.google.com/app/apikey'
-       MODEL_1='gemini-2.5-flash'; MODEL_2='gemini-2.5-pro'; MODEL_3='gemini-2.0-flash' ;;
+       DEFAULT_MODEL='gemini-2.5-flash' ;;
     6) PROVIDER=groq;         KEY_VAR=GROQ_API_KEY;       KEY_URL='https://console.groq.com/keys'
-       MODEL_1='llama-3.3-70b-versatile'; MODEL_2='moonshotai/kimi-k2-instruct'; MODEL_3='qwen/qwen3-32b' ;;
+       DEFAULT_MODEL='llama-3.3-70b-versatile' ;;
     7) PROVIDER=deepseek;     KEY_VAR=DEEPSEEK_API_KEY;   KEY_URL='https://platform.deepseek.com/api_keys'
-       MODEL_1='deepseek-chat'; MODEL_2='deepseek-reasoner'; MODEL_3='deepseek-chat' ;;
+       DEFAULT_MODEL='deepseek-chat' ;;
     8) PROVIDER=xai;          KEY_VAR=XAI_API_KEY;        KEY_URL='https://console.x.ai'
-       MODEL_1='grok-4'; MODEL_2='grok-3'; MODEL_3='grok-3-mini' ;;
+       DEFAULT_MODEL='grok-4' ;;
 esac
+MODEL="$DEFAULT_MODEL"
 
 printf '\n'
 note "Get a $KEY_VAR here:"
@@ -202,27 +203,7 @@ done
 ok "$KEY_VAR set to $(mask "$PROVIDER_KEY")"
 
 # ---------------------------------------------------------------------------
-# Step 2 - Model
-# ---------------------------------------------------------------------------
-step 'Pick a default model'
-note "Suggestions for $PROVIDER. You can change this any time with /model in chat."
-printf '\n'
-printf '  1) %s\n' "$MODEL_1"
-printf '  2) %s\n' "$MODEL_2"
-printf '  3) %s\n' "$MODEL_3"
-printf '  4) %sEnter a different model ID%s\n' "$C_DIM" "$C_OFF"
-printf '\n'
-ask_choice 4
-case "$CHOICE" in
-    1) MODEL="$MODEL_1" ;;
-    2) MODEL="$MODEL_2" ;;
-    3) MODEL="$MODEL_3" ;;
-    4) ask_text 'Model ID' "$MODEL_1"; MODEL="$ANSWER" ;;
-esac
-ok "Default model: $MODEL"
-
-# ---------------------------------------------------------------------------
-# Step 3 - API server key and external access
+# Step 2 - API server key and external access
 # ---------------------------------------------------------------------------
 step 'API server key'
 note 'Hermes runs an OpenAI-compatible API on port 8642. The dashboard needs'
@@ -272,7 +253,7 @@ note 'You will need this to log in at http://localhost:9119'
 note 'Re-run ./setup.sh to regenerate it.'
 
 # ---------------------------------------------------------------------------
-# Step 4 - Web search (optional)
+# Step 3 - Web search (optional)
 # ---------------------------------------------------------------------------
 step 'Web search (optional)'
 note 'Without this the agent cannot look things up online. Brave has a free tier.'
@@ -307,7 +288,7 @@ if [ -n "$SEARCH_VAR" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 5 - Chat platform (optional)
+# Step 4 - Chat platform (optional)
 # ---------------------------------------------------------------------------
 step 'Chat platform (optional)'
 note 'Message Hermes from your phone. You can always use the web dashboard instead.'
@@ -342,7 +323,7 @@ if [ -n "$CHAT_VAR" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Step 6 - Data folder
+# Step 5 - Data folder
 # ---------------------------------------------------------------------------
 step 'Where should Hermes keep its data?'
 note 'One folder holds everything: config, chat history, memory, learned skills'
@@ -492,7 +473,7 @@ printf '\n%s================================================================%s\n
 printf '%s  Setup complete%s\n' "$C_GREEN$C_BOLD" "$C_OFF"
 printf '%s================================================================%s\n\n' "$C_BOLD" "$C_OFF"
 printf '  Provider     %s\n' "$PROVIDER"
-printf '  Model        %s\n' "$MODEL"
+printf '  Model        %s (change via dashboard)\n' "$MODEL"
 if [ "$API_HOST" = "0.0.0.0" ]; then
     printf '  API server   port 8642 (external)\n'
 else

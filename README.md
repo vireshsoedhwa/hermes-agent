@@ -26,7 +26,7 @@ cd hermes-agent
 .\setup.cmd
 ```
 
-That's it. The wizard walks you through six short steps, then offers to start Hermes. When it finishes, open the dashboard:
+That's it. The wizard walks you through five short steps, then offers to start Hermes. When it finishes, open the dashboard:
 
 **http://localhost:9119**
 
@@ -39,11 +39,12 @@ The only thing you need to bring is **one API key from a model provider**. [Olla
 | Step | Question | Notes |
 | --- | --- | --- |
 | 1 | Which model provider? | Menu of 8, with a link to get the key |
-| 2 | Which model? | Suggestions for your provider, or type your own |
-| 3 | — | API key + dashboard password generated for you |
-| 4 | Web search? | Optional, skippable |
-| 5 | Chat platform? | Optional — Telegram, Discord, Slack, or skip |
-| 6 | Where to store data? | Defaults to `./hermes-data` |
+| 2 | — | API key + dashboard password generated for you |
+| 3 | Web search? | Optional, skippable |
+| 4 | Chat platform? | Optional — Telegram, Discord, Slack, or skip |
+| 5 | Where to store data? | Defaults to `./hermes-data` |
+
+A safe default model is selected automatically. After first boot, open the dashboard to browse all available models and switch with one click.
 
 Keys are hidden as you paste them and echoed back masked (`****3456`) so you can confirm. Re-run the setup wizard any time (`./setup.sh` or `.\setup.cmd`) to change your answers; your previous `.env` is backed up with a timestamp.
 

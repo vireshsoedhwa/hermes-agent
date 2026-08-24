@@ -146,28 +146,28 @@ $choice = Ask-Choice 8
 
 $providers = @{
     1 = @{ Provider='ollama-cloud'; KeyVar='OLLAMA_API_KEY';     KeyUrl='https://ollama.com/settings/keys'
-           Models=@('gemma4:31b','gpt-oss:120b','glm-5.2') }
+           DefaultModel='gpt-oss:120b' }
     2 = @{ Provider='openrouter';   KeyVar='OPENROUTER_API_KEY'; KeyUrl='https://openrouter.ai/keys'
-           Models=@('anthropic/claude-sonnet-4.6','openai/gpt-5.5','google/gemini-2.5-flash') }
+           DefaultModel='anthropic/claude-sonnet-4.6' }
     3 = @{ Provider='anthropic';    KeyVar='ANTHROPIC_API_KEY';  KeyUrl='https://console.anthropic.com/settings/keys'
-           Models=@('claude-sonnet-4-6','claude-opus-4-1','claude-haiku-4-5') }
+           DefaultModel='claude-sonnet-4-6' }
     4 = @{ Provider='openai';       KeyVar='OPENAI_API_KEY';     KeyUrl='https://platform.openai.com/api-keys'
-           Models=@('gpt-5.5','gpt-4o','gpt-4o-mini') }
+           DefaultModel='gpt-5.5' }
     5 = @{ Provider='gemini';       KeyVar='GOOGLE_API_KEY';     KeyUrl='https://aistudio.google.com/app/apikey'
-           Models=@('gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash') }
+           DefaultModel='gemini-2.5-flash' }
     6 = @{ Provider='groq';         KeyVar='GROQ_API_KEY';       KeyUrl='https://console.groq.com/keys'
-           Models=@('llama-3.3-70b-versatile','moonshotai/kimi-k2-instruct','qwen/qwen3-32b') }
+           DefaultModel='llama-3.3-70b-versatile' }
     7 = @{ Provider='deepseek';     KeyVar='DEEPSEEK_API_KEY';   KeyUrl='https://platform.deepseek.com/api_keys'
-           Models=@('deepseek-chat','deepseek-reasoner','deepseek-chat') }
+           DefaultModel='deepseek-chat' }
     8 = @{ Provider='xai';          KeyVar='XAI_API_KEY';        KeyUrl='https://console.x.ai'
-           Models=@('grok-4','grok-3','grok-3-mini') }
+           DefaultModel='grok-4' }
 }
 
 $p = $providers[$choice]
 $PROVIDER   = $p.Provider
 $KEY_VAR    = $p.KeyVar
 $KEY_URL    = $p.KeyUrl
-$MODEL_LIST = $p.Models
+$MODEL      = $p.DefaultModel
 
 Write-Host ""
 Write-Note "Get a $KEY_VAR here:"
@@ -189,28 +189,7 @@ while ($true) {
 Write-Ok "$KEY_VAR set to $(Mask $PROVIDER_KEY)"
 
 # ---------------------------------------------------------------------------
-# Step 2 - Model
-# ---------------------------------------------------------------------------
-Write-Step 'Pick a default model'
-Write-Note "Suggestions for $PROVIDER. You can change this any time with /model in chat."
-Write-Host ""
-Write-Host "  1) $($MODEL_LIST[0])" -ForegroundColor White
-Write-Host "  2) $($MODEL_LIST[1])" -ForegroundColor White
-Write-Host "  3) $($MODEL_LIST[2])" -ForegroundColor White
-Write-Host "  4) Enter a different model ID" -ForegroundColor DarkGray
-Write-Host ""
-
-$choice = Ask-Choice 4
-switch ($choice) {
-    1 { $MODEL = $MODEL_LIST[0] }
-    2 { $MODEL = $MODEL_LIST[1] }
-    3 { $MODEL = $MODEL_LIST[2] }
-    4 { $MODEL = Ask-Text 'Model ID' $MODEL_LIST[0] }
-}
-Write-Ok "Default model: $MODEL"
-
-# ---------------------------------------------------------------------------
-# Step 3 - API server key
+# Step 2 - API server key
 # ---------------------------------------------------------------------------
 Write-Step 'API server key'
 Write-Note 'Hermes runs an OpenAI-compatible API on port 8642. The dashboard needs'
@@ -244,7 +223,7 @@ Write-Note 'You will need this to log in at http://localhost:9119'
 Write-Note 'Re-run setup to regenerate it.'
 
 # ---------------------------------------------------------------------------
-# Step 4 - Web search (optional)
+# Step 3 - Web search (optional)
 # ---------------------------------------------------------------------------
 Write-Step 'Web search (optional)'
 Write-Note 'Without this the agent cannot look things up online. Brave has a free tier.'
@@ -282,7 +261,7 @@ if ($SEARCH_VAR) {
 }
 
 # ---------------------------------------------------------------------------
-# Step 5 - Chat platform (optional)
+# Step 4 - Chat platform (optional)
 # ---------------------------------------------------------------------------
 Write-Step 'Chat platform (optional)'
 Write-Note 'Message Hermes from your phone. You can always use the web dashboard instead.'
@@ -320,7 +299,7 @@ if ($CHAT_VAR) {
 }
 
 # ---------------------------------------------------------------------------
-# Step 6 - Data folder
+# Step 5 - Data folder
 # ---------------------------------------------------------------------------
 Write-Step 'Where should Hermes keep its data?'
 Write-Note 'One folder holds everything: config, chat history, memory, learned skills'
@@ -467,7 +446,7 @@ Write-Host "  Setup complete" -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor White
 Write-Host ""
 Write-Host "  Provider     $PROVIDER"
-Write-Host "  Model        $MODEL"
+Write-Host "  Model        $MODEL (change via dashboard)"
 if ($API_HOST -eq '0.0.0.0') {
     Write-Host "  API server   port 8642 (external)"
 } else {
