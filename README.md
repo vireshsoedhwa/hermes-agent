@@ -28,7 +28,7 @@ The only thing you need to bring is **one API key from a model provider**. [Olla
 | --- | --- | --- |
 | 1 | Which model provider? | Menu of 8, with a link to get the key |
 | 2 | Which model? | Suggestions for your provider, or type your own |
-| 3 | Allow external API access? | Loopback by default; say yes for Open WebUI etc. |
+| 3 | — | API key generated for you, nothing to answer |
 | 4 | Web search? | Optional, skippable |
 | 5 | Chat platform? | Optional — Telegram, Discord, Slack, or skip |
 | 6 | Where to store data? | Defaults to `./hermes-data` |
