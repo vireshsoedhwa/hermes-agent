@@ -156,6 +156,7 @@ ensure_dashboard_auth() {
         nousresearch/hermes-agent:latest \
         -c '
 import os, sys, yaml
+from hermes_cli.config import DEFAULT_CONFIG
 
 raw = sys.stdin.read()
 config = yaml.safe_load(raw) if raw.strip() else {}
@@ -165,11 +166,16 @@ if not isinstance(config, dict):
     print("ERROR: config.yaml root must be a YAML mapping", file=sys.stderr)
     sys.exit(1)
 
-dashboard = config.get("dashboard") or {}
+# Merge: start from defaults so _config_version and all required keys exist,
+# then overlay whatever the user already had (preserving their settings).
+merged = dict(DEFAULT_CONFIG)
+merged.update(config)
+
+dashboard = merged.get("dashboard") or {}
 basic = dashboard.get("basic_auth") or {}
 
 if basic.get("username") and basic.get("password_hash"):
-    yaml.safe_dump(config, sys.stdout, sort_keys=False)
+    yaml.safe_dump(merged, sys.stdout, sort_keys=False)
     print("EXISTS", file=sys.stderr)
     sys.exit(0)
 
@@ -178,7 +184,7 @@ dash_hash = hash_password(os.environ["DASH_PASS"])
 
 if not isinstance(dashboard, dict):
     dashboard = {}
-    config["dashboard"] = dashboard
+    merged["dashboard"] = dashboard
 if not isinstance(basic, dict):
     basic = {}
     dashboard["basic_auth"] = basic
@@ -186,7 +192,7 @@ if not isinstance(basic, dict):
 basic["username"] = "admin"
 basic["password_hash"] = dash_hash
 
-yaml.safe_dump(config, sys.stdout, sort_keys=False)
+yaml.safe_dump(merged, sys.stdout, sort_keys=False)
 print("UPDATED", file=sys.stderr)
 ' < "$_config_file" > "$_tmp" 2>"$_status_file"; then
         rm -f "$_tmp" "$_status_file"
