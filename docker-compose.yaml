@@ -49,8 +49,8 @@ services:
       - "host.docker.internal:host-gateway"
     ports:
       # Loopback-only by default; set HERMES_API_SERVER_HOST=0.0.0.0 to expose.
-      - "8642:8642"   # OpenAI-compatible API (loopback by default)
-      - "9119:9119"   # dashboard
+      - "127.0.0.1:8642:8642"   # OpenAI-compatible API (loopback by default)
+      - "127.0.0.1:9119:9119"   # dashboard
     volumes:
       - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
     environment:

@@ -115,6 +115,110 @@ ask_choice() {
 }
 
 # ---------------------------------------------------------------------------
+# Dashboard authentication helpers
+# ---------------------------------------------------------------------------
+
+generate_dashboard_password() {
+    DASH_PASS=''
+
+    if command -v openssl >/dev/null 2>&1; then
+        DASH_PASS=$(openssl rand -base64 18 2>/dev/null \
+            | tr -dc 'A-Za-z0-9' \
+            | head -c 20 || true)
+    fi
+
+    if [ -z "$DASH_PASS" ] && [ -r /dev/urandom ]; then
+        DASH_PASS=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom \
+            | head -c 20 || true)
+    fi
+
+    [ -n "$DASH_PASS" ] || DASH_PASS="hermes$(date +%s)"
+}
+
+ensure_dashboard_auth() {
+    _data_dir="$1"
+    _config_file="$_data_dir/config.yaml"
+
+    mkdir -p "$_data_dir" || die "Could not create $_data_dir"
+
+    [ -f "$_config_file" ] || : > "$_config_file"
+
+    generate_dashboard_password
+
+    note 'Checking dashboard authentication...'
+
+    _tmp="${_config_file}.tmp.$$"
+    _status_file="${_config_file}.status.$$"
+
+    if ! docker run --rm -i \
+        -e DASH_PASS="$DASH_PASS" \
+        --entrypoint python \
+        nousresearch/hermes-agent:latest \
+        -c '
+import os, sys, yaml
+
+raw = sys.stdin.read()
+config = yaml.safe_load(raw) if raw.strip() else {}
+if config is None:
+    config = {}
+if not isinstance(config, dict):
+    print("ERROR: config.yaml root must be a YAML mapping", file=sys.stderr)
+    sys.exit(1)
+
+dashboard = config.get("dashboard") or {}
+basic = dashboard.get("basic_auth") or {}
+
+if basic.get("username") and basic.get("password_hash"):
+    yaml.safe_dump(config, sys.stdout, sort_keys=False)
+    print("EXISTS", file=sys.stderr)
+    sys.exit(0)
+
+from plugins.dashboard_auth.basic import hash_password
+dash_hash = hash_password(os.environ["DASH_PASS"])
+
+if not isinstance(dashboard, dict):
+    dashboard = {}
+    config["dashboard"] = dashboard
+if not isinstance(basic, dict):
+    basic = {}
+    dashboard["basic_auth"] = basic
+
+basic["username"] = "admin"
+basic["password_hash"] = dash_hash
+
+yaml.safe_dump(config, sys.stdout, sort_keys=False)
+print("UPDATED", file=sys.stderr)
+' < "$_config_file" > "$_tmp" 2>"$_status_file"; then
+        rm -f "$_tmp" "$_status_file"
+        die 'Could not check or generate dashboard authentication. Is the Docker daemon running?'
+    fi
+
+    _status=$(cat "$_status_file" 2>/dev/null || true)
+    rm -f "$_status_file"
+
+    case "$_status" in
+        EXISTS)
+            rm -f "$_tmp"
+            ok "Dashboard authentication already configured"
+            DASH_PASS=''
+            return 0
+            ;;
+        UPDATED)
+            _backup="${_config_file}.backup.$(date +%Y%m%d-%H%M%S)"
+            cp "$_config_file" "$_backup"
+            mv "$_tmp" "$_config_file"
+            ok "Dashboard authentication configured in $_config_file"
+            note "Backup saved to $_backup"
+            return 0
+            ;;
+        *)
+            rm -f "$_tmp"
+            die "${_status:-Unexpected error during dashboard auth configuration.}"
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # Banner
 # ---------------------------------------------------------------------------
 printf '\n%s================================================================%s\n' "$C_BOLD" "$C_OFF"
@@ -136,7 +240,26 @@ if [ -f "$ENV_FILE" ]; then
     printf '\n'
     warn "An existing $ENV_FILE was found."
     if ! ask_yes_no 'Reconfigure from scratch? (a timestamped backup will be kept)' n; then
-        note 'Keeping your existing configuration. Nothing changed.'
+        note 'Keeping your existing .env configuration.'
+
+        DATA_DIR=$(grep '^HERMES_DATA_DIR=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' | tr -d "'" || true)
+        [ -n "$DATA_DIR" ] || DATA_DIR='./hermes-data'
+
+        printf '\n'
+        note "Checking persisted Hermes configuration in $DATA_DIR..."
+        ensure_dashboard_auth "$DATA_DIR"
+
+        printf '\n'
+        ok 'Existing installation checked successfully.'
+
+        if [ -n "${DASH_PASS:-}" ]; then
+            printf '\n'
+            printf '  Dashboard   %shttp://localhost:9119%s\n' "$C_CYAN" "$C_OFF"
+            printf '  Login       %sadmin / %s%s\n' "$C_BOLD" "$DASH_PASS" "$C_OFF"
+            printf '\n'
+            warn 'Save this dashboard password now. It is not stored in plaintext.'
+        fi
+
         printf '\nStart Hermes with: %sdocker compose up -d%s\n\n' "$C_BOLD" "$C_OFF"
         exit 0
     fi
@@ -236,21 +359,6 @@ note 'API server is loopback-only (127.0.0.1). The dashboard and CLI work normal
 note 'To expose it externally, set HERMES_API_SERVER_HOST=0.0.0.0 in .env.'
 
 API_HOST=127.0.0.1
-
-# Generate a random dashboard password (16 chars, alphanumeric).
-DASH_PASS=''
-if command -v openssl >/dev/null 2>&1; then
-    DASH_PASS=$(openssl rand -base64 12 2>/dev/null | tr -d '/+=' | head -c 16 || true)
-fi
-if [ -z "$DASH_PASS" ] && [ -r /dev/urandom ]; then
-    DASH_PASS=$(od -An -tu1 -N12 /dev/urandom 2>/dev/null | tr -d ' ' | head -c 16 || true)
-fi
-if [ -z "$DASH_PASS" ]; then
-    DASH_PASS="hermes$(date +%s)"
-fi
-ok "Generated dashboard password: $DASH_PASS"
-note 'You will need this to log in at http://localhost:9119'
-note 'Re-run ./setup.sh to regenerate it.'
 
 # ---------------------------------------------------------------------------
 # Step 3 - Web search (optional)
@@ -352,46 +460,9 @@ if [ "$(uname -s)" = Linux ] && command -v id >/dev/null 2>&1; then
 fi
 
 # ---------------------------------------------------------------------------
-# Write dashboard basic_auth into config.yaml
+# Configure dashboard authentication
 # ---------------------------------------------------------------------------
-# The dashboard refuses to bind to 0.0.0.0 without an auth provider.
-# We generate a scrypt hash using the Hermes container's Python and inject
-# it into config.yaml so the dashboard starts cleanly on first boot.
-CONFIG_FILE="$DATA_DIR/config.yaml"
-if command -v docker >/dev/null 2>&1; then
-    note 'Generating dashboard password hash...'
-    DASH_HASH=$(docker run --rm --entrypoint python nousresearch/hermes-agent:latest \
-        -c "from plugins.dashboard_auth.basic import hash_password; print(hash_password('$DASH_PASS'))" \
-        2>/dev/null || true)
-    if [ -n "$DASH_HASH" ]; then
-        if [ -f "$CONFIG_FILE" ]; then
-            # Remove any existing dashboard: block and append fresh one.
-            # Use sed to delete from 'dashboard:' to the next top-level key.
-            sed -i.bak '/^dashboard:/,/^[^ #]/{/^dashboard:/d; /^  basic_auth:/d; /^    username:/d; /^    password_hash:/d; /^$/d;}' "$CONFIG_FILE" 2>/dev/null || true
-        fi
-        {
-            printf '\ndashboard:\n'
-            printf '  basic_auth:\n'
-            printf '    username: admin\n'
-            printf '    password_hash: "%s"\n' "$DASH_HASH"
-        } >> "$CONFIG_FILE"
-        ok 'Dashboard auth configured in config.yaml'
-    else
-        warn 'Could not generate password hash (Docker failed).'
-        warn "Add this to $CONFIG_FILE manually:"
-        printf '  dashboard:\n'
-        printf '    basic_auth:\n'
-        printf '      username: admin\n'
-        printf '      password_hash: <run docker to generate hash for password: %s>\n' "$DASH_PASS"
-    fi
-else
-    warn 'Docker not found — cannot generate dashboard password hash.'
-    warn "After installing Docker, run ./setup.sh again, or manually add to $CONFIG_FILE:"
-    printf '  dashboard:\n'
-    printf '    basic_auth:\n'
-    printf '      username: admin\n'
-    printf '      password_hash: <generated by Hermes container>\n'
-fi
+ensure_dashboard_auth "$DATA_DIR"
 
 # ---------------------------------------------------------------------------
 # Write .env
@@ -480,7 +551,11 @@ else
     printf '  API server   port 8642 (loopback only)\n'
 fi
 printf '  Dashboard   %shttp://localhost:9119%s\n' "$C_CYAN" "$C_OFF"
-printf '  Login       %sadmin / %s%s\n' "$C_BOLD" "$DASH_PASS" "$C_OFF"
+if [ -n "${DASH_PASS:-}" ]; then
+    printf '  Login       %sadmin / %s%s\n' "$C_BOLD" "$DASH_PASS" "$C_OFF"
+else
+    printf '  Login       %sadmin / (existing password)%s\n' "$C_BOLD" "$C_OFF"
+fi
 printf '  Web search   %s\n' "${SEARCH_VAR:-none}"
 printf '  Chat         %s\n' "${CHAT_VAR:-dashboard only}"
 printf '  Data folder  %s\n' "$DATA_DIR"
@@ -493,7 +568,11 @@ if ask_yes_no 'Start Hermes now?' y; then
     if docker compose up -d; then
         printf '\n%sHermes is starting.%s\n\n' "$C_GREEN$C_BOLD" "$C_OFF"
         printf '  Dashboard  %shttp://localhost:9119%s\n' "$C_CYAN" "$C_OFF"
-        printf '  Login      %sadmin / %s%s\n' "$C_BOLD" "$DASH_PASS" "$C_OFF"
+        if [ -n "${DASH_PASS:-}" ]; then
+            printf '  Login      %sadmin / %s%s\n' "$C_BOLD" "$DASH_PASS" "$C_OFF"
+        else
+            printf '  Login      %sadmin / (existing password)%s\n' "$C_BOLD" "$C_OFF"
+        fi
         if [ "$API_HOST" = "0.0.0.0" ]; then
             printf '  API        %shttp://localhost:8642/v1%s\n' "$C_CYAN" "$C_OFF"
         fi
