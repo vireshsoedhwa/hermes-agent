@@ -53,6 +53,7 @@ services:
       - "127.0.0.1:9119:9119"   # dashboard
     volumes:
       - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
+      - ${HERMES_SHARED_DIR:-./hermes-shared}:/shared
     environment:
       # The API server always runs (the dashboard needs it for cron fires).
       # It binds to 127.0.0.1 by default — internal only. Set
