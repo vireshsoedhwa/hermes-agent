@@ -1,6 +1,7 @@
 # Runtime data — everything Hermes owns. Keep the directory, ignore contents so
 # the bind mount target exists on a fresh clone with correct ownership.
 hermes-data/*
+hermes-shared/*
 !hermes-data/.gitkeep
 
 open-webui
