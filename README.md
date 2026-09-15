@@ -32,7 +32,27 @@ OLLAMA_API_KEY=sk-...
 HERMES_API_SERVER_KEY=$(openssl rand -hex 32)
 ```
 
-Everything else needed for Hermes has a default or is optional. OpenCode starts with an empty sentinel workspace; configure its password, model credential, and model route before delegating work. See `.env.example` for the full reference.
+Everything else needed for Hermes has a default or is optional. OpenCode starts with the empty `opencode-workspace/` fallback; configure its password, model credential, model route, and coding workspace before delegating work. See `.env.example` for the full reference.
+
+---
+
+## Repository layout
+
+| Folder | Purpose |
+| --- | --- |
+| `hermes-data/` | Persistent Hermes runtime state. It is mounted at `/opt/data` in the Hermes container and at `/data` in preflight. Conversations, memory, learned skills, configuration, and logs live here. Runtime contents are gitignored; `.gitkeep` only preserves the empty folder in a fresh clone. Back up this folder to preserve Hermes state. |
+| `hermes-shared/` | Explicit host ↔ Hermes file exchange. It is mounted read-write at `/shared` in the Hermes container. Put documents here when you want Hermes to read them, and let Hermes write exports here. It is not mounted into OpenCode, and its runtime contents are gitignored. |
+| `opencode-workspace/` | Empty, safe fallback mounted at `/workspace` in OpenCode when `OPENCODE_WORKSPACE_PATH` is not set. It lets the stack start before a real coding workspace is selected. Runtime contents are gitignored; do not use it as a primary checkout. |
+| `scripts/` | Tracked host-side/container support scripts. `preflight.sh` is mounted read-only into the preflight container and validates Hermes credentials, API server-key requirements, optional-capability settings, and data-directory writability before startup. |
+| `templates/` | Tracked reusable OpenCode configuration. `opencode.json` is the default read-only global policy mounted into OpenCode. `projects.allowlist.example` is a deprecated migration artifact and is not consumed by Compose or any script. |
+
+The real OpenCode coding workspace normally lives **outside this repository** and is selected through the gitignored `.env` file:
+
+```dotenv
+OPENCODE_WORKSPACE_PATH=/Users/you/code-workspace
+```
+
+That host directory is mounted read-write at `/workspace` only in OpenCode. It may contain one repository or multiple nested repositories. Hermes never receives this mount.
 
 ---
 
