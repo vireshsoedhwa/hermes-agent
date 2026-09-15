@@ -1,32 +1,14 @@
-# Runtime data — everything Hermes owns. Keep the directory, ignore contents so
-# the bind mount target exists on a fresh clone with correct ownership.
+# Runtime data — keep the mount target, ignore its contents.
 hermes-data/*
-hermes-shared/*
 !hermes-data/.gitkeep
 
 # Files exchanged with Hermes through /shared.
 hermes-shared/*
 !hermes-shared/.gitkeep
 
-# Keep an empty agent-share skeleton for portable bind mounts, but ignore all
-# runtime context, handoff payloads, local policy, and staged project source.
-agent-share/*
-!agent-share/approved-context/
-!agent-share/handoff/
-!agent-share/projects/
-agent-share/approved-context/*
-!agent-share/approved-context/.gitkeep
-agent-share/handoff/*
-!agent-share/handoff/inbox/
-!agent-share/handoff/outbox/
-agent-share/handoff/inbox/*
-!agent-share/handoff/inbox/.gitkeep
-agent-share/handoff/outbox/*
-!agent-share/handoff/outbox/.gitkeep
-agent-share/projects/*
-!agent-share/projects/_sentinel/
-agent-share/projects/_sentinel/*
-!agent-share/projects/_sentinel/.gitkeep
+# Empty default OpenCode workspace for first startup.
+opencode-workspace/*
+!opencode-workspace/.gitkeep
 
 open-webui
 notebooks

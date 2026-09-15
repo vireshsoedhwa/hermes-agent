@@ -116,7 +116,7 @@ A separate host directory is mounted into Hermes at `/shared` for files you want
 HERMES_SHARED_DIR=./hermes-shared
 ```
 
-The default is `./hermes-shared`; an absolute path also works. Hermes's safe-write roots currently allow writes only to `/opt/data` and the OpenCode handoff inbox, so treat the general `/shared` directory as host-provided input unless you deliberately broaden `HERMES_WRITE_SAFE_ROOT` in Compose.
+The default is `./hermes-shared`; an absolute path also works. Hermes can read and write this explicit exchange directory, but it never receives the OpenCode workspace mount.
 
 Both default host directories are gitignored. Their committed `.gitkeep` files only ensure that fresh clones contain usable bind-mount targets.
 
@@ -215,29 +215,19 @@ Anything other than `up` means the gateway is crashing — check `docker compose
 
 ## The OpenCode worker
 
-Hermes coordinates; it never receives the coding workspace mount. A separate OpenCode container is the only component allowed to modify project source. OpenCode receives one host-selected workspace root, which may be either one repository or a parent directory containing multiple repositories.
+Hermes coordinates over OpenCode's authenticated HTTP API; it never receives the coding workspace mount. A separate OpenCode container is the only component allowed to modify project source. OpenCode receives one host-selected workspace root, which may be either one repository or a parent directory containing multiple repositories.
 
 ```text
-you -> hermes (plans, writes task contracts)
-          |  handoff/inbox   (hermes rw, opencode ro)
+you -> hermes (plans and verifies)
+          |  authenticated internal HTTP API
           v
        opencode (edits the selected workspace, runs tests)
-          |  handoff/outbox  (opencode rw, hermes ro)
+          |  session messages and diffs over the API
           v
-       you review and promote changes
+       hermes -> you review and promote changes
 ```
 
-The empty runtime directory skeleton is committed, while its contents are gitignored. No setup script or manual scaffolding is required:
-
-```text
-agent-share/
-  approved-context/   sanitized notes for planning (Hermes, read-only)
-  handoff/inbox/      task contracts
-  handoff/outbox/     worker results
-  projects/_sentinel/ empty default workspace
-```
-
-The committed `templates/opencode.json` is mounted read-only as OpenCode's global configuration. To use a host-specific policy without editing tracked files, set `OPENCODE_POLICY_PATH` in `.env`. Configuration precedence with a repository's own `opencode.json` is version-dependent and is not a security boundary.
+No filesystem handoff or `agent-share` directory is required. The committed empty `opencode-workspace/` directory is the safe default workspace, and its runtime contents are gitignored. The committed `templates/opencode.json` is mounted read-only as OpenCode's global configuration. To use a host-specific policy without editing tracked files, set `OPENCODE_POLICY_PATH` in `.env`. Configuration precedence with a repository's own `opencode.json` is version-dependent and is not a security boundary.
 
 ### Minimum OpenCode configuration
 
@@ -253,7 +243,7 @@ The provider identifier in `OPENCODE_MODEL` must match OpenCode's provider ident
 
 ### Selecting a workspace
 
-The safe default is the committed empty sentinel. Select the real workspace only in the gitignored `.env`:
+The safe default is the committed empty `./opencode-workspace` directory. Select the real workspace only in the gitignored `.env`:
 
 ```dotenv
 OPENCODE_WORKSPACE_PATH=/Users/you/code-workspace
@@ -292,7 +282,7 @@ OpenCode waits for preflight and Hermes health before starting. Preflight valida
 
 ### What holds the boundary
 
-- **No workspace mount for Hermes.** Hermes gets the handoff pair and optional sanitized notes. Read-only prevents edits, not disclosure to a remote model, so only put approved material in `approved-context/`.
+- **No workspace mount for Hermes.** Hermes delegates and collects results through the internal OpenCode API; only OpenCode receives the host coding workspace.
 - **Host-selected mount scope.** The gitignored `.env` determines the workspace root. Neither agent can change that host file.
 - **An internal control network.** OpenCode's API is exposed only over the internal `agent_control` network, not through a host port.
 - **A host-selected global policy.** The default policy disables sharing and denies external-directory reads, `git push`, `ssh`, `curl`, and `wget`; command patterns are convenience controls, not a sandbox.
@@ -301,7 +291,7 @@ OpenCode waits for preflight and Hermes health before starting. Preflight valida
 
 A read-write parent workspace grants OpenCode authority over all nested repositories. Test runners execute arbitrary project code inside the container, and automatic permission approval makes `ask` a workflow mechanism rather than a safety boundary. Mount only trusted, secret-scrubbed repositories.
 
-The default configuration gives neither container the Docker socket, `privileged`, `network_mode: host`, nor a host home-directory mount. Host path variables are operator-controlled and are not path-validated: never set `OPENCODE_WORKSPACE_PATH`, `HERMES_DATA_DIR`, `HERMES_SHARED_DIR`, or `AGENT_SHARE_ROOT` to your home directory or another unnecessarily broad path.
+The default configuration gives neither container the Docker socket, `privileged`, `network_mode: host`, nor a host home-directory mount. Host path variables are operator-controlled and are not path-validated: never set `OPENCODE_WORKSPACE_PATH`, `HERMES_DATA_DIR`, or `HERMES_SHARED_DIR` to your home directory or another unnecessarily broad path.
 
 ---
 

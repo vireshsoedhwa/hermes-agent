@@ -55,14 +55,8 @@ services:
       - "127.0.0.1:9119:9119"   # dashboard
     volumes:
       - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
+      # General host <-> Hermes file exchange; project source is never mounted.
       - ${HERMES_SHARED_DIR:-./hermes-shared}:/shared
-      # Asymmetric handoff. Hermes writes task contracts and reads results; it
-      # cannot write results and has NO mount of the project source at all.
-      - ${AGENT_SHARE_ROOT:-./agent-share}/handoff/inbox:/shared/handoff/inbox
-      - ${AGENT_SHARE_ROOT:-./agent-share}/handoff/outbox:/shared/handoff/outbox:ro
-      # Optional sanitized planning context. Read-only prevents modification but
-      # NOT disclosure to a remote model — only put approved notes here.
-      - ${AGENT_SHARE_ROOT:-./agent-share}/approved-context:/shared/approved-context:ro
     environment:
       # The API server always runs (the dashboard needs it for cron fires).
       # It binds to 127.0.0.1 by default — internal only. Set
@@ -96,10 +90,9 @@ services:
 
       - GATEWAY_ALLOW_ALL_USERS=true
 
-      # The Docker image sets HERMES_WRITE_SAFE_ROOT=/opt/data by default,
-      # which blocks writes to the handoff inbox. Add the inbox so Hermes
-      # can write task contracts for OpenCode.
-      - HERMES_WRITE_SAFE_ROOT=/opt/data:/shared/handoff/inbox
+      # Permit Hermes to write its persistent data and explicit host exchange
+      # directory. The OpenCode workspace is not mounted into this container.
+      - HERMES_WRITE_SAFE_ROOT=/opt/data:/shared
 
       # OpenCode worker connection — Hermes can reach the worker's API on
       # the internal agent_control network.
@@ -154,7 +147,7 @@ services:
   #
   # Starts alongside Hermes. OPENCODE_WORKSPACE_PATH may select one disposable
   # repository or a parent directory of trusted, agent-writable repositories.
-  # The committed sentinel is an empty, safe default for first startup.
+  # The committed opencode-workspace is an empty, safe default for first startup.
   # ---------------------------------------------------------------------------
   opencode:
     image: ${OPENCODE_IMAGE:-ghcr.io/anomalyco/opencode:latest}
@@ -180,11 +173,8 @@ services:
       # Host-operator-selected workspace. OpenCode can modify everything under
       # this root, including all nested repositories.
       - type: bind
-        source: ${OPENCODE_WORKSPACE_PATH:-./agent-share/projects/_sentinel}
+        source: ${OPENCODE_WORKSPACE_PATH:-./opencode-workspace}
         target: /workspace
-      # Mirror image of the Hermes mounts: inbox read-only, outbox writable.
-      - ${AGENT_SHARE_ROOT:-./agent-share}/handoff/inbox:/handoff/inbox:ro
-      - ${AGENT_SHARE_ROOT:-./agent-share}/handoff/outbox:/handoff/outbox
       # Host-selected global configuration. Project configuration precedence is
       # version-dependent and must not be treated as a security boundary.
       - type: bind
