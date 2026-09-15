@@ -75,7 +75,7 @@ if [ -n "$FOUND_PROVIDERS" ]; then
     pass "LLM provider credential found:$FOUND_PROVIDERS"
 else
     fail 'No LLM provider API key is set. Hermes cannot run without a model provider.'
-    hint 'Run the guided setup to fix this:  ./setup.sh'
+    hint 'Set a provider API key in .env (see .env.example).'
 fi
 
 # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ if [ -n "$PROVIDER" ]; then
             pass "Provider '$PROVIDER' has its credential ($MATCHED)"
         else
             fail "HERMES_INFERENCE_PROVIDER=$PROVIDER but none of these are set: $NEEDS"
-            hint 'Run the guided setup to pick a provider and paste its key:  ./setup.sh'
+            hint 'Set the matching key in .env (see .env.example).'
         fi
     fi
 else
@@ -133,13 +133,13 @@ fi
 API_KEY=$(value_of API_SERVER_KEY)
 if [ -z "$API_KEY" ]; then
     fail 'HERMES_API_SERVER_KEY is empty. The API server refuses to start without it.'
-    hint 'Run ./setup.sh to generate one automatically.'
+    hint 'Generate one with:  openssl rand -hex 32  and set HERMES_API_SERVER_KEY in .env'
 elif [ "$API_KEY" = 'local-dev-key' ] || [ "$API_KEY" = 'change-me' ]; then
     fail "API_SERVER_KEY is still the placeholder '$API_KEY'."
-    hint 'Run ./setup.sh to generate a real one automatically.'
+    hint 'Generate a real one:  openssl rand -hex 32'
 elif [ "${#API_KEY}" -lt 16 ]; then
     fail "API_SERVER_KEY is too short (${#API_KEY} chars); the gateway requires at least 16."
-    hint 'Run ./setup.sh to generate one automatically.'
+    hint 'Generate one with:  openssl rand -hex 32'
 else
     pass "API server key is set (${#API_KEY} chars)"
 fi
@@ -173,7 +173,7 @@ elif touch "$DATA_DIR/.preflight-write-test" 2>/dev/null; then
     pass 'Data directory is mounted and writable'
 else
     fail "Data directory $DATA_DIR is not writable by the container."
-    hint 'Re-run ./setup.sh on Linux to align the container user with yours,'
+    hint 'On Linux, set HERMES_UID and HERMES_GID in .env to match your user,'
     hint 'or fix ownership on the host: sudo chown -R $(id -u):$(id -g) ./hermes-data'
 fi
 
@@ -184,7 +184,7 @@ if is_set BRAVE_SEARCH_API_KEY || is_set TAVILY_API_KEY || is_set EXA_API_KEY \
     || is_set SEARXNG_URL || is_set FIRECRAWL_API_KEY || is_set PARALLEL_API_KEY; then
     pass 'Web search backend configured'
 else
-    warn 'No web search key set; the agent cannot search the web. Add one with ./setup.sh'
+    warn 'No web search key set; the agent cannot search the web. Add one to .env.'
 fi
 
 MESSAGING=''
@@ -213,8 +213,8 @@ printf '%s----------------------%s\n' "$C_DIM" "$C_OFF"
 if [ "$ERRORS" -gt 0 ]; then
     printf '%sPreflight failed: %s error(s), %s warning(s).%s\n' \
         "$C_RED$C_BOLD" "$ERRORS" "$WARNINGS" "$C_OFF"
-    printf 'Hermes was not started. The quickest fix is the guided setup:\n'
-    printf '\n    %s./setup.sh%s\n\n' "$C_BOLD" "$C_OFF"
+    printf 'Hermes was not started. Check the errors above, edit .env, and re-run:\n'
+    printf '\n    %sdocker compose up -d%s\n\n' "$C_BOLD" "$C_OFF"
     exit 1
 fi
 

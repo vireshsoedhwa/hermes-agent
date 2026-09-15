@@ -1,0 +1,35 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "{env:OPENCODE_MODEL}",
+  "share": "disabled",
+  "autoupdate": false,
+  "permission": {
+    "external_directory": "deny",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "read": {
+      "*": "allow",
+      "*.env": "deny",
+      "*.env.*": "deny",
+      "*.pem": "deny",
+      "*.key": "deny"
+    },
+    "edit": {
+      "*": "allow",
+      ".git/**": "deny",
+      ".github/workflows/**": "ask"
+    },
+    "bash": {
+      "*": "ask",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git push*": "deny",
+      "ssh *": "deny",
+      "scp *": "deny",
+      "curl *": "deny",
+      "wget *": "deny",
+      "rm -rf *": "deny"
+    }
+  }
+}

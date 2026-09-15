@@ -6,6 +6,8 @@ services:
     container_name: hermes-preflight
     entrypoint: ["/bin/sh", "/scripts/preflight.sh"]
     restart: "no"
+    # No network is needed to validate local credentials and data writability.
+    network_mode: none
     volumes:
       - ./scripts:/scripts:ro
       - ${HERMES_DATA_DIR:-./hermes-data}:/data
@@ -54,6 +56,13 @@ services:
     volumes:
       - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
       - ${HERMES_SHARED_DIR:-./hermes-shared}:/shared
+      # Asymmetric handoff. Hermes writes task contracts and reads results; it
+      # cannot write results and has NO mount of the project source at all.
+      - ${AGENT_SHARE_ROOT:-./agent-share}/handoff/inbox:/shared/handoff/inbox
+      - ${AGENT_SHARE_ROOT:-./agent-share}/handoff/outbox:/shared/handoff/outbox:ro
+      # Optional sanitized planning context. Read-only prevents modification but
+      # NOT disclosure to a remote model — only put approved notes here.
+      - ${AGENT_SHARE_ROOT:-./agent-share}/approved-context:/shared/approved-context:ro
     environment:
       # The API server always runs (the dashboard needs it for cron fires).
       # It binds to 127.0.0.1 by default — internal only. Set
@@ -87,6 +96,17 @@ services:
 
       - GATEWAY_ALLOW_ALL_USERS=true
 
+      # The Docker image sets HERMES_WRITE_SAFE_ROOT=/opt/data by default,
+      # which blocks writes to the handoff inbox. Add the inbox so Hermes
+      # can write task contracts for OpenCode.
+      - HERMES_WRITE_SAFE_ROOT=/opt/data:/shared/handoff/inbox
+
+      # OpenCode worker connection — Hermes can reach the worker's API on
+      # the internal agent_control network.
+      - OPENCODE_SERVER_URL=http://opencode:4096
+      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-hermes}
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
+
       # On Linux, set these in .env to match your host user so files written
       # into the shared data folder stay editable: HERMES_UID=$(id -u)
       - HERMES_UID=${HERMES_UID:-10000}
@@ -108,4 +128,115 @@ services:
         limits:
           memory: 8G
           cpus: "4.0"
+          # Caps runaway process spawning. Declared here rather than as a
+          # top-level pids_limit: Compose rejects both at once.
+          pids: 512
+
+    security_opt:
+      - no-new-privileges:true
+
+    # Dropping all capabilities is the stricter posture, but the official image
+    # is s6-supervised and starts as root before dropping to HERMES_UID, so it
+    # needs a few back. Enable after smoke testing; if the container fails to
+    # come up, comment this block out again and report it.
+    # cap_drop: ["ALL"]
+    # cap_add: ["CHOWN", "SETUID", "SETGID", "DAC_OVERRIDE", "FOWNER", "FSETID"]
+
+    networks:
+      # agent_control is internal: it is how Hermes (or a future MCP bridge)
+      # reaches the OpenCode API without that API being reachable from the host
+      # or LAN. hermes_egress carries the model/provider traffic.
+      - agent_control
+      - hermes_egress
+
+  # ---------------------------------------------------------------------------
+  # OpenCode — the ONLY component allowed to modify project source.
+  #
+  # Starts alongside Hermes. OPENCODE_WORKSPACE_PATH may select one disposable
+  # repository or a parent directory of trusted, agent-writable repositories.
+  # The committed sentinel is an empty, safe default for first startup.
+  # ---------------------------------------------------------------------------
+  opencode:
+    image: ${OPENCODE_IMAGE:-ghcr.io/anomalyco/opencode:latest}
+    container_name: opencode
+    restart: unless-stopped
+    stop_grace_period: 15s
+    depends_on:
+      preflight:
+        condition: service_completed_successfully
+      hermes:
+        condition: service_healthy
+    # The image's entrypoint is ["opencode"], so the command starts with the
+    # subcommand. If your pinned image uses a shell entrypoint instead, prefix
+    # with "opencode" here.
+    command: ["serve", "--hostname", "0.0.0.0", "--port", "4096"]
+    working_dir: /workspace
+
+    # expose, not ports: reachable on agent_control, never from host or LAN.
+    expose:
+      - "4096"
+
+    volumes:
+      # Host-operator-selected workspace. OpenCode can modify everything under
+      # this root, including all nested repositories.
+      - type: bind
+        source: ${OPENCODE_WORKSPACE_PATH:-./agent-share/projects/_sentinel}
+        target: /workspace
+      # Mirror image of the Hermes mounts: inbox read-only, outbox writable.
+      - ${AGENT_SHARE_ROOT:-./agent-share}/handoff/inbox:/handoff/inbox:ro
+      - ${AGENT_SHARE_ROOT:-./agent-share}/handoff/outbox:/handoff/outbox
+      # Host-selected global configuration. Project configuration precedence is
+      # version-dependent and must not be treated as a security boundary.
+      - type: bind
+        source: ${OPENCODE_POLICY_PATH:-./templates/opencode.json}
+        target: /etc/opencode/opencode.json
+        read_only: true
+      - opencode_state:/home/opencode/.local/share/opencode
+
+    environment:
+      # Deliberately separate, independently revocable credentials. Do NOT
+      # reuse the Hermes keys here.
+      - ANTHROPIC_API_KEY=${OPENCODE_ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENCODE_OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENCODE_OPENROUTER_API_KEY:-}
+      - OLLAMA_API_KEY=${OPENCODE_OLLAMA_API_KEY:-}
+      - OPENCODE_MODEL=${OPENCODE_MODEL:-}
+      # Verify that your pinned image version honours these before relying on
+      # them. The internal network is the boundary that actually holds.
+      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-hermes}
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
+
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    # No extra_hosts entry: unlike Hermes, OpenCode gets no route back to host
+    # services. A read_only root filesystem is the next hardening step once the
+    # image's writable paths are confirmed.
+
+    networks:
+      - agent_control
+      - model_egress
+
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: "2.0"
+          pids: 256
+
+networks:
+  # internal: true means no gateway to the outside world. This is what keeps
+  # the OpenCode control API off the host and the LAN.
+  agent_control:
+    internal: true
+  hermes_egress: {}
+  # Direct egress. Compose networks cannot express hostname allowlists, so for
+  # a strict private-build profile replace this with a dual-homed egress
+  # gateway that only permits your chosen provider endpoints.
+  model_egress: {}
+
+volumes:
+  opencode_state: {}
 
