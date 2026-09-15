@@ -98,17 +98,27 @@ docker compose run --rm preflight
 
 ---
 
-## Your data lives in one folder
+## Runtime state and shared files
 
-Everything Hermes owns — config, conversation history, memory, learned skills, credentials, and logs — lives in a single directory mounted at `/opt/data` inside the container.
+Hermes runtime state — configuration, conversation history, memory, learned skills, and logs — lives in one directory mounted at `/opt/data` inside the container.
 
 By default that is `./hermes-data`. Point it anywhere with `HERMES_DATA_DIR` in `.env`:
 
-```bash
+```dotenv
 HERMES_DATA_DIR=/Users/you/Documents/hermes-data
 ```
 
-**This one folder is your entire agent.** Back it up and you have backed up everything. Copy it to another machine, clone this repo there, and your agent picks up exactly where it left off. It is gitignored, so nothing personal is ever committed.
+Back up this directory to preserve Hermes runtime state. A complete migration also requires securely recreating the machine's gitignored `.env` credentials and settings. OpenCode session state is stored separately in the Docker named volume `opencode_state`, and project files remain in the host directory selected by `OPENCODE_WORKSPACE_PATH`.
+
+A separate host directory is mounted into Hermes at `/shared` for files you want Hermes to read:
+
+```dotenv
+HERMES_SHARED_DIR=./hermes-shared
+```
+
+The default is `./hermes-shared`; an absolute path also works. Hermes's safe-write roots currently allow writes only to `/opt/data` and the OpenCode handoff inbox, so treat the general `/shared` directory as host-provided input unless you deliberately broaden `HERMES_WRITE_SAFE_ROOT` in Compose.
+
+Both default host directories are gitignored. Their committed `.gitkeep` files only ensure that fresh clones contain usable bind-mount targets.
 
 ---
 
@@ -124,20 +134,22 @@ docker exec -it hermes hermes     # interactive chat in your terminal
 docker compose ps                 # health status
 ```
 
-To reset all data (keep `.env`):
+To reset Hermes runtime state at the default `./hermes-data` path while keeping `.env`:
 
 ```bash
 docker compose down
-find hermes-data -mindepth 1 -not -name .gitkeep -delete
+find ./hermes-data -mindepth 1 -not -name .gitkeep -delete
 ```
 
-To reset everything including `.env`:
+If `HERMES_DATA_DIR` points elsewhere, replace `./hermes-data` with that exact directory after verifying the path. This command permanently deletes Hermes sessions, memory, learned skills, configuration, and logs.
+
+A normal `docker compose down` preserves OpenCode's named session volume. To permanently reset that state too:
 
 ```bash
-docker compose down
-find hermes-data -mindepth 1 -not -name .gitkeep -delete
-rm .env
+docker compose down -v
 ```
+
+The `-v` option deletes this Compose project's named volumes; it does not delete bind-mounted Hermes data, shared files, or workspace repositories. Remove `.env` separately only when you also intend to discard the local credentials and settings.
 
 ### Endpoints
 
@@ -285,9 +297,11 @@ OpenCode waits for preflight and Hermes health before starting. Preflight valida
 - **An internal control network.** OpenCode's API is exposed only over the internal `agent_control` network, not through a host port.
 - **A host-selected global policy.** The default policy disables sharing and denies external-directory reads, `git push`, `ssh`, `curl`, and `wget`; command patterns are convenience controls, not a sandbox.
 - **Separate credentials.** The `OPENCODE_*_API_KEY` variables are independent from Hermes credentials.
-- **Manual promotion.** OpenCode cannot push under the default policy; review changes on the host before promoting them.
+- **Manual promotion.** The default policy denies direct `git push` shell requests. Review changes on the host before promoting them, but do not treat command patterns as a complete exfiltration boundary.
 
-A read-write parent workspace grants OpenCode authority over all nested repositories. Test runners execute arbitrary project code inside the container, and automatic permission approval makes `ask` a workflow mechanism rather than a safety boundary. Mount only trusted, secret-scrubbed repositories. Neither container receives the Docker socket, `privileged`, `network_mode: host`, or a home-directory mount.
+A read-write parent workspace grants OpenCode authority over all nested repositories. Test runners execute arbitrary project code inside the container, and automatic permission approval makes `ask` a workflow mechanism rather than a safety boundary. Mount only trusted, secret-scrubbed repositories.
+
+The default configuration gives neither container the Docker socket, `privileged`, `network_mode: host`, nor a host home-directory mount. Host path variables are operator-controlled and are not path-validated: never set `OPENCODE_WORKSPACE_PATH`, `HERMES_DATA_DIR`, `HERMES_SHARED_DIR`, or `AGENT_SHARE_ROOT` to your home directory or another unnecessarily broad path.
 
 ---
 
@@ -295,11 +309,11 @@ A read-write parent workspace grants OpenCode authority over all nested reposito
 
 This compose file is tuned for **local, single-user use**:
 
-- `GATEWAY_ALLOW_ALL_USERS=true` authorizes every user with no allowlist.
-- The dashboard binds `0.0.0.0` so `localhost:9119` is reachable.
-- The API server binds to `127.0.0.1` by default. Setting `HERMES_API_SERVER_HOST=0.0.0.0` exposes it on the published port — keep `HERMES_API_SERVER_KEY` secret.
+- Compose currently hard-codes `GATEWAY_ALLOW_ALL_USERS=true`, authorizing every gateway user with no allowlist. Setting a same-named value in `.env` has no effect unless the Compose entries are first made configurable.
+- The dashboard listens inside the container while Compose publishes it only on host loopback at `127.0.0.1:9119`.
+- The API server binds to container loopback by default. Setting `HERMES_API_SERVER_HOST=0.0.0.0` makes it reachable through the Compose mapping at host loopback `127.0.0.1:8642`; it is still not published on the LAN. Keep `HERMES_API_SERVER_KEY` secret.
 
-Hermes can run terminal commands. Before exposing any of this beyond your own machine, read the [security guide](https://hermes-agent.nousresearch.com/docs/user-guide/security), set `GATEWAY_ALLOW_ALL_USERS=false` with an explicit allowlist, and put a [dashboard auth provider](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) in front of the UI.
+Hermes can run terminal commands. Before changing the host port mappings or otherwise exposing this deployment beyond your own machine, read the [security guide](https://hermes-agent.nousresearch.com/docs/user-guide/security), make `GATEWAY_ALLOW_ALL_USERS` configurable with an explicit user allowlist, and put a [dashboard auth provider](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) in front of the UI.
 
 Never commit `.env`. It is gitignored, and `.env.example` is the only one meant to be shared.
 
