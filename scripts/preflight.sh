@@ -152,7 +152,31 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Gateway authorization sanity check.
+# 4. OpenCode worker Basic-auth credentials. OpenCode's API is only reachable
+#    on the internal agent_control network, but an empty password would still
+#    let any container on that network call it unauthenticated. The preflight
+#    gate exists, so use it: both username and password must be non-empty.
+# ---------------------------------------------------------------------------
+OC_USER=$(value_of OPENCODE_SERVER_USERNAME)
+OC_PASS=$(value_of OPENCODE_SERVER_PASSWORD)
+if [ -z "$OC_USER" ]; then
+    fail 'OPENCODE_SERVER_USERNAME is empty. OpenCode would start with no Basic-auth username.'
+    hint 'Set OPENCODE_SERVER_USERNAME in .env (default is "hermes").'
+else
+    pass "OpenCode server username is set ($OC_USER)"
+fi
+if [ -z "$OC_PASS" ]; then
+    fail 'OPENCODE_SERVER_PASSWORD is empty. OpenCode would start with an empty Basic-auth password.'
+    hint 'Generate one with:  openssl rand -hex 32  and set OPENCODE_SERVER_PASSWORD in .env'
+elif [ "${#OC_PASS}" -lt 16 ]; then
+    fail "OPENCODE_SERVER_PASSWORD is too short (${#OC_PASS} chars); use at least 16."
+    hint 'Generate one with:  openssl rand -hex 32'
+else
+    pass "OpenCode server password is set (${#OC_PASS} chars)"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Gateway authorization sanity check.
 # ---------------------------------------------------------------------------
 case "$(value_of GATEWAY_ALLOW_ALL_USERS)" in
     true|1|yes|on|TRUE|True)
@@ -162,7 +186,7 @@ case "$(value_of GATEWAY_ALLOW_ALL_USERS)" in
 esac
 
 # ---------------------------------------------------------------------------
-# 5. The shared data directory must exist and be writable.
+# 6. The shared data directory must exist and be writable.
 # ---------------------------------------------------------------------------
 DATA_DIR=/data
 if [ ! -d "$DATA_DIR" ]; then
@@ -178,7 +202,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Optional capabilities — warnings only.
+# 7. Optional capabilities — warnings only.
 # ---------------------------------------------------------------------------
 if is_set BRAVE_SEARCH_API_KEY || is_set TAVILY_API_KEY || is_set EXA_API_KEY \
     || is_set SEARXNG_URL || is_set FIRECRAWL_API_KEY || is_set PARALLEL_API_KEY; then

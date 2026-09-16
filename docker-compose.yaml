@@ -35,6 +35,10 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+      # OpenCode worker Basic-auth — non-empty enforced by preflight so the
+      # worker never comes up with an empty password on the internal network.
+      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-hermes}
+      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
 
   hermes:
     image: nousresearch/hermes-agent:latest
