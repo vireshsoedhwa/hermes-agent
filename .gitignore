@@ -6,6 +6,10 @@ hermes-data/*
 hermes-shared/*
 !hermes-shared/.gitkeep
 
+# Files exchanged between Hermes and OpenCode through /exchange.
+agent-shared/*
+!agent-shared/.gitkeep
+
 # Empty default OpenCode workspace for first startup.
 opencode-workspace/*
 !opencode-workspace/.gitkeep

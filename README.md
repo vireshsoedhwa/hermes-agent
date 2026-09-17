@@ -42,6 +42,7 @@ Everything else needed for Hermes has a default or is optional. OpenCode starts 
 | --- | --- |
 | `hermes-data/` | Persistent Hermes runtime state. It is mounted at `/opt/data` in the Hermes container and at `/data` in preflight. Conversations, memory, learned skills, configuration, and logs live here. Runtime contents are gitignored; `.gitkeep` only preserves the empty folder in a fresh clone. Back up this folder to preserve Hermes state. |
 | `hermes-shared/` | Explicit host ↔ Hermes file exchange. It is mounted read-write at `/shared` in the Hermes container. Put documents here when you want Hermes to read them, and let Hermes write exports here. It is not mounted into OpenCode, and its runtime contents are gitignored. |
+| `agent-shared/` | Agent ↔ agent file exchange, mounted read-write at `/exchange` in BOTH Hermes and OpenCode. It is the only path OpenCode is allowed to touch outside its `/workspace` (gated by a scoped `external_directory` rule in `templates/opencode.json`). Runtime contents are gitignored; `.gitkeep` only preserves the empty folder in a fresh clone. |
 | `opencode-workspace/` | Empty, safe fallback mounted at `/workspace` in OpenCode when `OPENCODE_WORKSPACE_PATH` is not set. It lets the stack start before a real coding workspace is selected. Runtime contents are gitignored; do not use it as a primary checkout. |
 | `scripts/` | Tracked host-side/container support scripts. `preflight.sh` is mounted read-only into the preflight container and validates Hermes credentials, API server-key requirements, optional-capability settings, and data-directory writability before startup. |
 | `templates/` | Tracked reusable OpenCode configuration. `opencode.json` is the default read-only global policy mounted into OpenCode. `projects.allowlist.example` is a deprecated migration artifact and is not consumed by Compose or any script. |
@@ -138,7 +139,15 @@ HERMES_SHARED_DIR=./hermes-shared
 
 The default is `./hermes-shared`; an absolute path also works. Hermes can read and write this explicit exchange directory, but it never receives the OpenCode workspace mount.
 
-Both default host directories are gitignored. Their committed `.gitkeep` files only ensure that fresh clones contain usable bind-mount targets.
+A second host directory is mounted into BOTH Hermes and OpenCode at `/exchange` for agent ↔ agent file exchange:
+
+```dotenv
+AGENT_SHARED_DIR=./agent-shared
+```
+
+The default is `./agent-shared`; an absolute path also works. Both containers can read and write `/exchange`. It is the only path OpenCode is permitted to touch outside its `/workspace` — the scoped `external_directory` rule in `templates/opencode.json` denies every other external path. Preflight warns (but does not block startup) if `/exchange` is missing or unwritable.
+
+All default host exchange directories are gitignored. Their committed `.gitkeep` files only ensure that fresh clones contain usable bind-mount targets.
 
 ---
 
@@ -300,18 +309,49 @@ docker compose up -d --force-recreate opencode
 
 OpenCode waits for preflight and Hermes health before starting. Preflight validates Hermes credentials, API server-key requirements, optional-capability warnings, and data-directory writability; it does not scan or approve the coding workspace. Hermes reaches OpenCode at `opencode:4096` on the internal `agent_control` network.
 
+### Verifying OpenCode results
+
+Hermes has no workspace mount, so it cannot run tests or inspect the project tree directly. It verifies OpenCode's work through two in-container channels that stay off the host:
+
+1. **Session messages over the API.** OpenCode returns diffs, tool outputs, and exit codes in the session messages Hermes reads through the authenticated `/prompt_async` and `/file/content` endpoints on `agent_control`.
+2. **A verify artifact at `/exchange/verify.json`.** After completing a task, OpenCode writes a structured verification report to `/exchange/verify.json` (the shared agent↔agent directory). Hermes reads it and treats any non-zero exit code or `passed: false` as a failure.
+
+Convention for `/exchange/verify.json`:
+
+```json
+{
+  "task": "short description of the requested change",
+  "timestamp": "2026-09-16T20:51:10Z",
+  "commands": [
+    {
+      "command": "npm test",
+      "exit_code": 0,
+      "duration_ms": 1234,
+      "output_tail": "last lines of stdout/stderr"
+    }
+  ],
+  "passed": true,
+  "files_changed": ["src/foo.ts", "src/foo.test.ts"],
+  "notes": "optional free-text summary"
+}
+```
+
+To keep the verification loop low-friction, the default policy allow-lists common test, lint, typecheck, and build commands so OpenCode runs them without a per-command approval round-trip to Hermes. The allow-list is scoped to recognised test/lint/typecheck/build invocations across Node, Python, Go, Rust, Make, Maven, Gradle, .NET, Ruby, and Elixir projects; everything else still falls through to `"*": "ask"`. Destructive and exfiltration commands (`rm -rf *`, `git push*`, `ssh *`, `scp *`, `curl *`, `wget *`) remain denied. See `templates/opencode.json` for the full list.
+
+This trust is concrete but not independent: Hermes is reading OpenCode's self-reported results, not re-executing the tests. Test runners execute arbitrary project code inside the OpenCode container (an accepted capability boundary, see below), so the boundary that actually holds is container isolation, not the command allow-list. Treat host-side CI as the real promotion gate — the default policy denies `git push` so changes are reviewed on the host before merging.
+
 ### What holds the boundary
 
 - **No workspace mount for Hermes.** Hermes delegates and collects results through the internal OpenCode API; only OpenCode receives the host coding workspace.
 - **Host-selected mount scope.** The gitignored `.env` determines the workspace root. Neither agent can change that host file.
 - **An internal control network.** OpenCode's API is exposed only over the internal `agent_control` network, not through a host port.
-- **A host-selected global policy.** The default policy disables sharing and denies external-directory reads, `git push`, `ssh`, `curl`, and `wget`; command patterns are convenience controls, not a sandbox.
+- **A host-selected global policy.** The default policy disables sharing, denies external-directory access except for the scoped `/exchange` agent-exchange channel, denies `git push`, `ssh`, `curl`, and `wget`, and allow-lists common test/lint/typecheck/build commands so OpenCode can verify its own work without a per-command approval round-trip. Command patterns are convenience controls, not a sandbox.
 - **Separate credentials.** The `OPENCODE_*_API_KEY` variables are independent from Hermes credentials.
 - **Manual promotion.** The default policy denies direct `git push` shell requests. Review changes on the host before promoting them, but do not treat command patterns as a complete exfiltration boundary.
 
 A read-write parent workspace grants OpenCode authority over all nested repositories. Test runners execute arbitrary project code inside the container, and automatic permission approval makes `ask` a workflow mechanism rather than a safety boundary. Mount only trusted, secret-scrubbed repositories.
 
-The default configuration gives neither container the Docker socket, `privileged`, `network_mode: host`, nor a host home-directory mount. Host path variables are operator-controlled and are not path-validated: never set `OPENCODE_WORKSPACE_PATH`, `HERMES_DATA_DIR`, or `HERMES_SHARED_DIR` to your home directory or another unnecessarily broad path.
+The default configuration gives neither container the Docker socket, `privileged`, `network_mode: host`, nor a host home-directory mount. Host path variables are operator-controlled and are not path-validated: never set `OPENCODE_WORKSPACE_PATH`, `HERMES_DATA_DIR`, `HERMES_SHARED_DIR`, or `AGENT_SHARED_DIR` to your home directory or another unnecessarily broad path.
 
 ---
 

@@ -11,6 +11,7 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ${HERMES_DATA_DIR:-./hermes-data}:/data
+      - ${AGENT_SHARED_DIR:-./agent-shared}:/exchange
     environment:
       # Mirrors the hermes service so both see an identical configuration.
       - API_SERVER_HOST=${HERMES_API_SERVER_HOST:-127.0.0.1}
@@ -61,6 +62,8 @@ services:
       - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
       # General host <-> Hermes file exchange; project source is never mounted.
       - ${HERMES_SHARED_DIR:-./hermes-shared}:/shared
+      # Agent <-> agent file exchange; also mounted into OpenCode at /exchange.
+      - ${AGENT_SHARED_DIR:-./agent-shared}:/exchange
     environment:
       # The API server always runs (the dashboard needs it for cron fires).
       # It binds to 127.0.0.1 by default — internal only. Set
@@ -95,8 +98,10 @@ services:
       - GATEWAY_ALLOW_ALL_USERS=true
 
       # Permit Hermes to write its persistent data and explicit host exchange
-      # directory. The OpenCode workspace is not mounted into this container.
-      - HERMES_WRITE_SAFE_ROOT=/opt/data:/shared
+      # directories. /exchange is the shared agent <-> agent channel (also
+      # mounted into OpenCode); /shared is the Hermes-only host exchange dir.
+      # The OpenCode workspace is not mounted into this container.
+      - HERMES_WRITE_SAFE_ROOT=/opt/data:/shared:/exchange
 
       # OpenCode worker connection — Hermes can reach the worker's API on
       # the internal agent_control network.
@@ -185,6 +190,12 @@ services:
         source: ${OPENCODE_POLICY_PATH:-./templates/opencode.json}
         target: /etc/opencode/opencode.json
         read_only: true
+      # Agent <-> agent file exchange; also mounted into Hermes at /exchange.
+      # The only path OpenCode is allowed to touch outside /workspace; gated
+      # by the scoped external_directory rule in templates/opencode.json.
+      - type: bind
+        source: ${AGENT_SHARED_DIR:-./agent-shared}
+        target: /exchange
       - opencode_state:/home/opencode/.local/share/opencode
 
     environment:

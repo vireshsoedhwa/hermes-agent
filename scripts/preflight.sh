@@ -201,6 +201,21 @@ else
     hint 'or fix ownership on the host: sudo chown -R $(id -u):$(id -g) ./hermes-data'
 fi
 
+# 6b. The agent <-> agent exchange directory is shared between Hermes and
+#     OpenCode. A missing or unwritable /exchange does not block startup
+#     (it is a convenience channel, not core runtime state), so warn only.
+EXCHANGE_DIR=/exchange
+if [ ! -d "$EXCHANGE_DIR" ]; then
+    warn "Exchange directory is not mounted at $EXCHANGE_DIR."
+    hint 'Agent <-> agent file exchange will be unavailable until AGENT_SHARED_DIR is mounted.'
+elif touch "$EXCHANGE_DIR/.preflight-write-test" 2>/dev/null; then
+    rm -f "$EXCHANGE_DIR/.preflight-write-test"
+    pass 'Exchange directory is mounted and writable'
+else
+    warn "Exchange directory $EXCHANGE_DIR is not writable by the container."
+    hint 'On Linux, match HERMES_UID/HERMES_GID so both containers can write /exchange.'
+fi
+
 # ---------------------------------------------------------------------------
 # 7. Optional capabilities — warnings only.
 # ---------------------------------------------------------------------------
