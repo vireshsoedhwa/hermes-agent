@@ -351,7 +351,7 @@ This trust is concrete but not independent: Hermes is reading OpenCode's self-re
 
 A read-write parent workspace grants OpenCode authority over all nested repositories. Test runners execute arbitrary project code inside the container, and automatic permission approval makes `ask` a workflow mechanism rather than a safety boundary. Mount only trusted, secret-scrubbed repositories.
 
-The default configuration gives neither container the Docker socket, `privileged`, `network_mode: host`, nor a host home-directory mount. Host path variables are operator-controlled and are not path-validated: never set `OPENCODE_WORKSPACE_PATH`, `HERMES_DATA_DIR`, `HERMES_SHARED_DIR`, or `AGENT_SHARED_DIR` to your home directory or another unnecessarily broad path.
+The default configuration gives neither container the Docker socket, `privileged`, `network_mode: host`, a host home-directory mount, nor a `host.docker.internal` route. Hermes drops all Linux capabilities (except the few its s6 supervisor needs) and its image is pinned to a digest (not floating `:latest`). Host path variables are operator-controlled; preflight fails on system-root workspace paths and warns on secret-like files, but does not fully validate them: never set `OPENCODE_WORKSPACE_PATH`, `HERMES_DATA_DIR`, `HERMES_SHARED_DIR`, or `AGENT_SHARED_DIR` to your home directory or another unnecessarily broad path.
 
 ---
 
@@ -359,11 +359,11 @@ The default configuration gives neither container the Docker socket, `privileged
 
 This compose file is tuned for **local, single-user use**:
 
-- Compose currently hard-codes `GATEWAY_ALLOW_ALL_USERS=true`, authorizing every gateway user with no allowlist. Setting a same-named value in `.env` has no effect unless the Compose entries are first made configurable.
+- `GATEWAY_ALLOW_ALL_USERS` is configurable in `.env` (defaults to `true`). When `true`, every gateway/dashboard user is authorized with no allowlist — fine for single-user loopback use. Preflight fails startup if it is `true` while `HERMES_API_SERVER_HOST=0.0.0.0`. Before exposing beyond loopback, set it to `false` with an explicit user allowlist and put a [dashboard auth provider](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) in front of the UI.
 - The dashboard listens inside the container while Compose publishes it only on host loopback at `127.0.0.1:9119`.
 - The API server binds to container loopback by default. Setting `HERMES_API_SERVER_HOST=0.0.0.0` makes it reachable through the Compose mapping at host loopback `127.0.0.1:8642`; it is still not published on the LAN. Keep `HERMES_API_SERVER_KEY` secret.
 
-Hermes can run terminal commands. Before changing the host port mappings or otherwise exposing this deployment beyond your own machine, read the [security guide](https://hermes-agent.nousresearch.com/docs/user-guide/security), make `GATEWAY_ALLOW_ALL_USERS` configurable with an explicit user allowlist, and put a [dashboard auth provider](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) in front of the UI.
+Hermes can run terminal commands. Before changing the host port mappings or otherwise exposing this deployment beyond your own machine, read the [security guide](https://hermes-agent.nousresearch.com/docs/user-guide/security), set `GATEWAY_ALLOW_ALL_USERS=false` with an explicit user allowlist, and put a [dashboard auth provider](https://hermes-agent.nousresearch.com/docs/user-guide/features/web-dashboard) in front of the UI.
 
 Never commit `.env`. It is gitignored, and `.env.example` is the only one meant to be shared.
 

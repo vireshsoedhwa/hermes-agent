@@ -12,11 +12,13 @@ services:
       - ./scripts:/scripts:ro
       - ${HERMES_DATA_DIR:-./hermes-data}:/data
       - ${AGENT_SHARED_DIR:-./agent-shared}:/exchange
+      # Read-only so preflight can scan for secrets without modifying source.
+      - ${OPENCODE_WORKSPACE_PATH:-./opencode-workspace}:/workspace:ro
     environment:
       # Mirrors the hermes service so both see an identical configuration.
       - API_SERVER_HOST=${HERMES_API_SERVER_HOST:-127.0.0.1}
       - API_SERVER_KEY=${HERMES_API_SERVER_KEY:-}
-      - GATEWAY_ALLOW_ALL_USERS=true
+      - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-true}
       - HERMES_INFERENCE_PROVIDER=${HERMES_INFERENCE_PROVIDER:-ollama-cloud}
       - HERMES_DEFAULT_MODEL=${HERMES_DEFAULT_MODEL:-gpt-oss:120b}
       # LLM providers — at least one must be set.
@@ -40,10 +42,16 @@ services:
       # worker never comes up with an empty password on the internal network.
       - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-hermes}
       - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
+      # Workspace path (for the preflight secret scan; read-only mount above).
+      - OPENCODE_WORKSPACE_PATH=${OPENCODE_WORKSPACE_PATH:-./opencode-workspace}
 
   hermes:
-    image: nousresearch/hermes-agent:latest
-    pull_policy: always
+    # Pinned to a multi-arch index digest for supply-chain reproducibility — a
+    # floating :latest tag can drift mid-task or pull a compromised publish.
+    # To upgrade, look up the new digest and update HERMES_IMAGE in .env:
+    #     docker buildx imagetools inspect nousresearch/hermes-agent:latest
+    image: ${HERMES_IMAGE:-nousresearch/hermes-agent@sha256:f953da60c908c9e5c35cdbaa355a5851965806d68bd62c616aa03565dd6d2331}
+    pull_policy: missing
     container_name: hermes
     restart: unless-stopped
     stop_grace_period: 15s
@@ -52,8 +60,12 @@ services:
       preflight:
         condition: service_completed_successfully
     shm_size: "4gb"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    # NOTE: host.docker.internal is deliberately NOT granted to Hermes. It
+    # would expose every 127.0.0.1 service on your host (databases, local
+    # LLMs, admin panels, cloud credential helpers) to the container. If
+    # you genuinely need Hermes to reach a specific host service (e.g. a
+    # local Ollama), prefer a scoped TCP proxy container on a dedicated
+    # network rather than re-adding a broad host-gateway route.
     ports:
       # Loopback-only by default; set HERMES_API_SERVER_HOST=0.0.0.0 to expose.
       - "127.0.0.1:8642:8642"   # OpenAI-compatible API (loopback by default)
@@ -95,7 +107,7 @@ services:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
 
-      - GATEWAY_ALLOW_ALL_USERS=true
+      - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-true}
 
       # Permit Hermes to write its persistent data and explicit host exchange
       # directories. /exchange is the shared agent <-> agent channel (also
@@ -137,12 +149,12 @@ services:
     security_opt:
       - no-new-privileges:true
 
-    # Dropping all capabilities is the stricter posture, but the official image
-    # is s6-supervised and starts as root before dropping to HERMES_UID, so it
-    # needs a few back. Enable after smoke testing; if the container fails to
-    # come up, comment this block out again and report it.
-    # cap_drop: ["ALL"]
-    # cap_add: ["CHOWN", "SETUID", "SETGID", "DAC_OVERRIDE", "FOWNER", "FSETID"]
+    # Dropping all capabilities is the stricter posture. The official image is
+    # s6-supervised and starts as root before dropping to HERMES_UID, so it
+    # needs a few capabilities back. If the container fails to come up after a
+    # Hermes image upgrade, comment this block out, smoke test, and report it.
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETUID", "SETGID", "DAC_OVERRIDE", "FOWNER", "FSETID"]
 
     networks:
       # agent_control is internal: it is how Hermes (or a future MCP bridge)

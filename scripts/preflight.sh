@@ -180,8 +180,13 @@ fi
 # ---------------------------------------------------------------------------
 case "$(value_of GATEWAY_ALLOW_ALL_USERS)" in
     true|1|yes|on|TRUE|True)
-        warn 'GATEWAY_ALLOW_ALL_USERS=true — every user is authorized, with no allowlist.'
-        hint 'Fine for local use. Set it to false and configure an allowlist before exposing this to a network.'
+        if [ "$API_HOST" = '0.0.0.0' ]; then
+            fail 'GATEWAY_ALLOW_ALL_USERS=true while API_SERVER_HOST=0.0.0.0 — the gateway is exposed to the network with no allowlist.'
+            hint 'Set GATEWAY_ALLOW_ALL_USERS=false with an explicit user allowlist, or keep HERMES_API_SERVER_HOST at loopback.'
+        else
+            warn 'GATEWAY_ALLOW_ALL_USERS=true — every user is authorized, with no allowlist.'
+            hint 'Fine for local use. Set it to false and configure an allowlist before exposing this to a network.'
+        fi
         ;;
 esac
 
@@ -214,6 +219,38 @@ elif touch "$EXCHANGE_DIR/.preflight-write-test" 2>/dev/null; then
 else
     warn "Exchange directory $EXCHANGE_DIR is not writable by the container."
     hint 'On Linux, match HERMES_UID/HERMES_GID so both containers can write /exchange.'
+fi
+
+# ---------------------------------------------------------------------------
+# 6c. OpenCode workspace — fail on catastrophically broad paths; warn on
+#     secret-looking files. Convenience only: scrub secrets before mounting,
+#     and only mount disposable repositories.
+# ---------------------------------------------------------------------------
+OC_WS=$(value_of OPENCODE_WORKSPACE_PATH)
+case "$OC_WS" in
+    /|/Users|/Users/|/home|/home/|/root|/root/|/etc|/var|/tmp|/tmp/)
+        fail "OPENCODE_WORKSPACE_PATH='$OC_WS' is a system root; never mount it into OpenCode."
+        hint 'Point OPENCODE_WORKSPACE_PATH at a dedicated disposable clone.'
+        ;;
+esac
+
+WS_DIR=/workspace
+if [ -d "$WS_DIR" ]; then
+    SECRET_HITS=$(find "$WS_DIR" -maxdepth 3 -type f \( \
+        -name '.env' -o -name '.env.local' -o -name '.env.*.local' \
+        -o -name '*.pem' -o -name '*.key' \
+        -o -name 'id_rsa' -o -name 'id_ed25519' -o -name 'id_ecdsa' \
+        -o -name '*.ppk' \) 2>/dev/null)
+    if [ -n "$SECRET_HITS" ]; then
+        warn 'Potential secret files found in the OpenCode workspace:'
+        printf '%s\n' "$SECRET_HITS" | sed 's/^/        /'
+        hint 'Scrub or remove secrets before mounting; OpenCode can read everything under /workspace.'
+    else
+        pass 'No obvious secret files in the OpenCode workspace (shallow scan)'
+    fi
+else
+    warn 'OpenCode workspace not mounted into preflight; skipping secret scan.'
+    hint 'Set OPENCODE_WORKSPACE_PATH in .env and ensure the bind mount is applied.'
 fi
 
 # ---------------------------------------------------------------------------
