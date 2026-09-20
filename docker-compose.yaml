@@ -11,7 +11,7 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ${HERMES_DATA_DIR:-./hermes-data}:/data
-      - ${AGENT_SHARED_DIR:-./agent-shared}:/exchange
+      - ${AGENT_SHARED_DIR:-./exchange}:/exchange
       # Read-only so preflight can scan for secrets without modifying source.
       - ${OPENCODE_WORKSPACE_PATH:-./opencode-workspace}:/workspace:ro
     environment:
@@ -73,9 +73,9 @@ services:
     volumes:
       - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
       # General host <-> Hermes file exchange; project source is never mounted.
-      - ${HERMES_SHARED_DIR:-./hermes-shared}:/shared
+      - ${HERMES_SHARED_DIR:-./shared}:/shared
       # Agent <-> agent file exchange; also mounted into OpenCode at /exchange.
-      - ${AGENT_SHARED_DIR:-./agent-shared}:/exchange
+      - ${AGENT_SHARED_DIR:-./exchange}:/exchange
     environment:
       # The API server always runs (the dashboard needs it for cron fires).
       # It binds to 127.0.0.1 by default — internal only. Set
@@ -206,7 +206,7 @@ services:
       # The only path OpenCode is allowed to touch outside /workspace; gated
       # by the scoped external_directory rule in templates/opencode.json.
       - type: bind
-        source: ${AGENT_SHARED_DIR:-./agent-shared}
+        source: ${AGENT_SHARED_DIR:-./exchange}
         target: /exchange
       - opencode_state:/home/opencode/.local/share/opencode
 

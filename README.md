@@ -41,8 +41,8 @@ Everything else needed for Hermes has a default or is optional. OpenCode starts 
 | Folder | Purpose |
 | --- | --- |
 | `hermes-data/` | Persistent Hermes runtime state. It is mounted at `/opt/data` in the Hermes container and at `/data` in preflight. Conversations, memory, learned skills, configuration, and logs live here. Runtime contents are gitignored; `.gitkeep` only preserves the empty folder in a fresh clone. Back up this folder to preserve Hermes state. |
-| `hermes-shared/` | Explicit host ↔ Hermes file exchange. It is mounted read-write at `/shared` in the Hermes container. Put documents here when you want Hermes to read them, and let Hermes write exports here. It is not mounted into OpenCode, and its runtime contents are gitignored. |
-| `agent-shared/` | Agent ↔ agent file exchange, mounted read-write at `/exchange` in Hermes, OpenCode, and preflight. It is the only path OpenCode is allowed to touch outside its `/workspace` (gated by a scoped `external_directory` rule in `templates/opencode.json`). Runtime contents are gitignored; `.gitkeep` only preserves the empty folder in a fresh clone. |
+| `shared/` | Explicit host ↔ Hermes file exchange. It is mounted read-write at `/shared` in the Hermes container. Put documents here when you want Hermes to read them, and let Hermes write exports here. It is not mounted into OpenCode, and its runtime contents are gitignored. |
+| `exchange/` | Agent ↔ agent file exchange, mounted read-write at `/exchange` in Hermes, OpenCode, and preflight. It is the only path OpenCode is allowed to touch outside its `/workspace` (gated by a scoped `external_directory` rule in `templates/opencode.json`). Runtime contents are gitignored; `.gitkeep` only preserves the empty folder in a fresh clone. |
 | `opencode-workspace/` | Empty, safe fallback mounted at `/workspace` in OpenCode when `OPENCODE_WORKSPACE_PATH` is not set. It lets the stack start before a real coding workspace is selected. Runtime contents are gitignored; do not use it as a primary checkout. |
 | `scripts/` | Tracked host-side/container support scripts. `preflight.sh` is mounted read-only into the preflight container and validates Hermes credentials, API server-key requirements, optional-capability settings, and data-directory and exchange-directory writability before startup. |
 | `templates/` | Tracked reusable OpenCode configuration. `opencode.json` is the default read-only global policy mounted into OpenCode. `projects.allowlist.example` is a deprecated migration artifact and is not consumed by Compose or any script. |
@@ -134,18 +134,18 @@ Back up this directory to preserve Hermes runtime state. A complete migration al
 A separate host directory is mounted into Hermes at `/shared` for files you want Hermes to read:
 
 ```dotenv
-HERMES_SHARED_DIR=./hermes-shared
+HERMES_SHARED_DIR=./shared
 ```
 
-The default is `./hermes-shared`; an absolute path also works. Hermes can read and write this explicit exchange directory, but it never receives the OpenCode workspace mount.
+The default is `./shared`; an absolute path also works. Hermes can read and write this explicit exchange directory, but it never receives the OpenCode workspace mount.
 
 A second host directory is mounted into BOTH Hermes and OpenCode at `/exchange` for agent ↔ agent file exchange:
 
 ```dotenv
-AGENT_SHARED_DIR=./agent-shared
+AGENT_SHARED_DIR=./exchange
 ```
 
-The default is `./agent-shared`; an absolute path also works. Both containers can read and write `/exchange`. It is the only path OpenCode is permitted to touch outside its `/workspace` — the scoped `external_directory` rule in `templates/opencode.json` denies every other external path. Preflight warns (but does not block startup) if `/exchange` is missing or unwritable.
+The default is `./exchange`; an absolute path also works. Both containers can read and write `/exchange`. It is the only path OpenCode is permitted to touch outside its `/workspace` — the scoped `external_directory` rule in `templates/opencode.json` denies every other external path. Preflight warns (but does not block startup) if `/exchange` is missing or unwritable.
 
 All default host exchange directories are gitignored. Their committed `.gitkeep` files only ensure that fresh clones contain usable bind-mount targets.
 
