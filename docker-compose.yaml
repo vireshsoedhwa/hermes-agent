@@ -251,6 +251,48 @@ services:
           cpus: "2.0"
           pids: 256
 
+  # ---------------------------------------------------------------------------
+  # mcp-proxy — scoped bridge to host-side MCP servers (Godot, Blender).
+  #
+  # The Blender/Godot editors and their MCP servers must run on the host (they
+  # talk to the GUI editors over localhost sockets). This tiny socat container
+  # is the ONLY thing granted a route to host.docker.internal — Hermes and
+  # OpenCode stay un-granted, matching the posture at the top of this file.
+  #
+  # It lives on hermes_egress (NOT agent_control, which is internal: true and
+  # has no route to the host). Hermes is on hermes_egress, so it reaches the
+  # proxy as http://mcp-proxy:<port>. OpenCode deliberately gets no host route
+  # and so cannot reach this proxy — only Hermes drives the MCP servers.
+  #
+  # Before this proxy can forward, run the MCP servers on the host bound to
+  # 127.0.0.1, e.g.:
+  #     godot-mcp   (HTTP)        →  http://127.0.0.1:9090
+  #     blender-mcp (stdio → HTTP via supergateway) →  http://127.0.0.1:9876
+  # Then set mcp_servers.godot.url / mcp_servers.blender.url in
+  # hermes-data/config.yaml to http://mcp-proxy:<port>.
+  # ---------------------------------------------------------------------------
+  mcp-proxy:
+    image: alpine/socat
+    container_name: hermes-mcp-proxy
+    restart: unless-stopped
+    # Forward fixed ports on the hermes_egress side to the same ports on the
+    # host loopback. socat stays in the foreground; one process per port.
+    # (alpine/socat's default entrypoint is `socat` itself, so we override
+    # the entrypoint to `sh -c` to run two socat processes in the background.)
+    entrypoint: ["sh", "-c"]
+    command: ["socat TCP-LISTEN:9090,fork,reuseaddr TCP:host.docker.internal:9090 & socat TCP-LISTEN:9876,fork,reuseaddr TCP:host.docker.internal:9876"]
+    # Scoped to THIS container only — Hermes and OpenCode never get this.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - hermes_egress
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.5"
+          pids: 32
+
 networks:
   # internal: true means no gateway to the outside world. This is what keeps
   # the OpenCode control API off the host and the LAN.
