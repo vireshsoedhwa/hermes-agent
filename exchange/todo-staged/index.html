@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>todo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <h1>todo</h1>
+
+    <form id="add-form" class="add-form" autocomplete="off">
+      <input
+        id="new-todo"
+        class="new-todo"
+        type="text"
+        placeholder="What needs to be done?"
+        aria-label="New todo text"
+      >
+      <button type="submit" class="add-btn">Add</button>
+    </form>
+
+    <section class="filters" role="group" aria-label="Filter todos">
+      <button type="button" class="filter-btn is-active" data-filter="all">All</button>
+      <button type="button" class="filter-btn" data-filter="active">Active</button>
+      <button type="button" class="filter-btn" data-filter="completed">Completed</button>
+    </section>
+
+    <ul id="todo-list" class="todo-list"></ul>
+
+    <p id="empty-state" class="empty-state" hidden>Nothing here yet.</p>
+
+    <footer class="footer">
+      <span id="counter" class="counter">0 items</span>
+      <button type="button" id="clear-completed" class="clear-btn">Clear completed</button>
+    </footer>
+  </main>
+
+  <script src="todoLogic.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

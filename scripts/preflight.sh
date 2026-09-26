@@ -152,31 +152,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. OpenCode worker Basic-auth credentials. OpenCode's API is only reachable
-#    on the internal agent_control network, but an empty password would still
-#    let any container on that network call it unauthenticated. The preflight
-#    gate exists, so use it: both username and password must be non-empty.
-# ---------------------------------------------------------------------------
-OC_USER=$(value_of OPENCODE_SERVER_USERNAME)
-OC_PASS=$(value_of OPENCODE_SERVER_PASSWORD)
-if [ -z "$OC_USER" ]; then
-    fail 'OPENCODE_SERVER_USERNAME is empty. OpenCode would start with no Basic-auth username.'
-    hint 'Set OPENCODE_SERVER_USERNAME in .env (default is "hermes").'
-else
-    pass "OpenCode server username is set ($OC_USER)"
-fi
-if [ -z "$OC_PASS" ]; then
-    fail 'OPENCODE_SERVER_PASSWORD is empty. OpenCode would start with an empty Basic-auth password.'
-    hint 'Generate one with:  openssl rand -hex 32  and set OPENCODE_SERVER_PASSWORD in .env'
-elif [ "${#OC_PASS}" -lt 16 ]; then
-    fail "OPENCODE_SERVER_PASSWORD is too short (${#OC_PASS} chars); use at least 16."
-    hint 'Generate one with:  openssl rand -hex 32'
-else
-    pass "OpenCode server password is set (${#OC_PASS} chars)"
-fi
-
-# ---------------------------------------------------------------------------
-# 5. Gateway authorization sanity check.
+# 4. Gateway authorization sanity check.
 # ---------------------------------------------------------------------------
 case "$(value_of GATEWAY_ALLOW_ALL_USERS)" in
     true|1|yes|on|TRUE|True)
@@ -206,55 +182,8 @@ else
     hint 'or fix ownership on the host: sudo chown -R $(id -u):$(id -g) ./hermes-data'
 fi
 
-# 6b. The agent <-> agent exchange directory is shared between Hermes and
-#     OpenCode. A missing or unwritable /exchange does not block startup
-#     (it is a convenience channel, not core runtime state), so warn only.
-EXCHANGE_DIR=/exchange
-if [ ! -d "$EXCHANGE_DIR" ]; then
-    warn "Exchange directory is not mounted at $EXCHANGE_DIR."
-    hint 'Agent <-> agent file exchange will be unavailable until AGENT_SHARED_DIR is mounted.'
-elif touch "$EXCHANGE_DIR/.preflight-write-test" 2>/dev/null; then
-    rm -f "$EXCHANGE_DIR/.preflight-write-test"
-    pass 'Exchange directory is mounted and writable'
-else
-    warn "Exchange directory $EXCHANGE_DIR is not writable by the container."
-    hint 'On Linux, match HERMES_UID/HERMES_GID so both containers can write /exchange.'
-fi
-
 # ---------------------------------------------------------------------------
-# 6c. OpenCode workspace — fail on catastrophically broad paths; warn on
-#     secret-looking files. Convenience only: scrub secrets before mounting,
-#     and only mount disposable repositories.
-# ---------------------------------------------------------------------------
-OC_WS=$(value_of OPENCODE_WORKSPACE_PATH)
-case "$OC_WS" in
-    /|/Users|/Users/|/home|/home/|/root|/root/|/etc|/var|/tmp|/tmp/)
-        fail "OPENCODE_WORKSPACE_PATH='$OC_WS' is a system root; never mount it into OpenCode."
-        hint 'Point OPENCODE_WORKSPACE_PATH at a dedicated disposable clone.'
-        ;;
-esac
-
-WS_DIR=/workspace
-if [ -d "$WS_DIR" ]; then
-    SECRET_HITS=$(find "$WS_DIR" -maxdepth 3 -type f \( \
-        -name '.env' -o -name '.env.local' -o -name '.env.*.local' \
-        -o -name '*.pem' -o -name '*.key' \
-        -o -name 'id_rsa' -o -name 'id_ed25519' -o -name 'id_ecdsa' \
-        -o -name '*.ppk' \) 2>/dev/null)
-    if [ -n "$SECRET_HITS" ]; then
-        warn 'Potential secret files found in the OpenCode workspace:'
-        printf '%s\n' "$SECRET_HITS" | sed 's/^/        /'
-        hint 'Scrub or remove secrets before mounting; OpenCode can read everything under /workspace.'
-    else
-        pass 'No obvious secret files in the OpenCode workspace (shallow scan)'
-    fi
-else
-    warn 'OpenCode workspace not mounted into preflight; skipping secret scan.'
-    hint 'Set OPENCODE_WORKSPACE_PATH in .env and ensure the bind mount is applied.'
-fi
-
-# ---------------------------------------------------------------------------
-# 7. Optional capabilities — warnings only.
+# 5. Optional capabilities — warnings only.
 # ---------------------------------------------------------------------------
 if is_set BRAVE_SEARCH_API_KEY || is_set TAVILY_API_KEY || is_set EXA_API_KEY \
     || is_set SEARXNG_URL || is_set FIRECRAWL_API_KEY || is_set PARALLEL_API_KEY; then

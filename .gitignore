@@ -6,14 +6,6 @@ hermes-data/*
 shared/*
 !shared/.gitkeep
 
-# Files exchanged between Hermes and OpenCode through /exchange.
-exchange/*
-!exchange/.gitkeep
-
-# Empty default OpenCode workspace for first startup.
-opencode-workspace/*
-!opencode-workspace/.gitkeep
-
 open-webui
 notebooks
 

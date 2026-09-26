@@ -11,9 +11,6 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ${HERMES_DATA_DIR:-./hermes-data}:/data
-      - ${AGENT_SHARED_DIR:-./exchange}:/exchange
-      # Read-only so preflight can scan for secrets without modifying source.
-      - ${OPENCODE_WORKSPACE_PATH:-./opencode-workspace}:/workspace:ro
     environment:
       # Mirrors the hermes service so both see an identical configuration.
       - API_SERVER_HOST=${HERMES_API_SERVER_HOST:-127.0.0.1}
@@ -38,12 +35,6 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:-}
       - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
-      # OpenCode worker Basic-auth — non-empty enforced by preflight so the
-      # worker never comes up with an empty password on the internal network.
-      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-hermes}
-      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
-      # Workspace path (for the preflight secret scan; read-only mount above).
-      - OPENCODE_WORKSPACE_PATH=${OPENCODE_WORKSPACE_PATH:-./opencode-workspace}
 
   hermes:
     # Pinned to a multi-arch index digest for supply-chain reproducibility — a
@@ -62,8 +53,8 @@ services:
     shm_size: "4gb"
     # NOTE: host.docker.internal is deliberately NOT granted to Hermes. It
     # would expose every 127.0.0.1 service on your host (databases, local
-    # LLMs, admin panels, cloud credential helpers) to the container. If
-    # you genuinely need Hermes to reach a specific host service (e.g. a
+    # LLMs, admin panels, cloud credential helpers) to the container. If you
+    # genuinely need Hermes to reach a specific host service (e.g. a
     # local Ollama), prefer a scoped TCP proxy container on a dedicated
     # network rather than re-adding a broad host-gateway route.
     ports:
@@ -74,8 +65,6 @@ services:
       - ${HERMES_DATA_DIR:-./hermes-data}:/opt/data
       # General host <-> Hermes file exchange; project source is never mounted.
       - ${HERMES_SHARED_DIR:-./shared}:/shared
-      # Agent <-> agent file exchange; also mounted into OpenCode at /exchange.
-      - ${AGENT_SHARED_DIR:-./exchange}:/exchange
     environment:
       # The API server always runs (the dashboard needs it for cron fires).
       # It binds to 127.0.0.1 by default — internal only. Set
@@ -118,16 +107,8 @@ services:
       - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-true}
 
       # Permit Hermes to write its persistent data and explicit host exchange
-      # directories. /exchange is the shared agent <-> agent channel (also
-      # mounted into OpenCode); /shared is the Hermes-only host exchange dir.
-      # The OpenCode workspace is not mounted into this container.
-      - HERMES_WRITE_SAFE_ROOT=/opt/data:/shared:/exchange
-
-      # OpenCode worker connection — Hermes can reach the worker's API on
-      # the internal agent_control network.
-      - OPENCODE_SERVER_URL=http://opencode:4096
-      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-hermes}
-      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
+      # directories. /shared is the host exchange dir.
+      - HERMES_WRITE_SAFE_ROOT=/opt/data:/shared
 
       # On Linux, set these in .env to match your host user so files written
       # into the shared data folder stay editable: HERMES_UID=$(id -u)
@@ -135,7 +116,7 @@ services:
       - HERMES_GID=${HERMES_GID:-10000}
 
     # Asks the s6 supervisor directly whether the gateway is up.
-    # Note that s6-svstat exits 0 even when a service is down, so the 'up'
+    # Note: s6-svstat exits 0 even when a service is down, so the 'up'
     # match is what actually gates it. /command is not on the exec PATH,
     # hence the absolute path.
     healthcheck:
@@ -165,145 +146,7 @@ services:
     cap_add: ["CHOWN", "SETUID", "SETGID", "DAC_OVERRIDE", "FOWNER", "FSETID"]
 
     networks:
-      # agent_control is internal: it is how Hermes (or a future MCP bridge)
-      # reaches the OpenCode API without that API being reachable from the host
-      # or LAN. hermes_egress carries the model/provider traffic.
-      - agent_control
       - hermes_egress
-
-  # ---------------------------------------------------------------------------
-  # OpenCode — the ONLY component allowed to modify project source.
-  #
-  # Starts alongside Hermes. OPENCODE_WORKSPACE_PATH may select one disposable
-  # repository or a parent directory of trusted, agent-writable repositories.
-  # The committed opencode-workspace is an empty, safe default for first startup.
-  # ---------------------------------------------------------------------------
-  opencode:
-    image: ${OPENCODE_IMAGE:-ghcr.io/anomalyco/opencode@sha256:0d3c9551ea2522fcfd23fbc2e302fc87218d6c198bff277e8ab44d93a3bd6d3d}
-    container_name: opencode
-    restart: unless-stopped
-    stop_grace_period: 15s
-    depends_on:
-      preflight:
-        condition: service_completed_successfully
-      hermes:
-        condition: service_healthy
-    # The image's entrypoint is ["opencode"], so the command starts with the
-    # subcommand. If your pinned image uses a shell entrypoint instead, prefix
-    # with "opencode" here.
-    command: ["serve", "--hostname", "0.0.0.0", "--port", "4096"]
-    working_dir: /workspace
-
-    # expose, not ports: reachable on agent_control, never from host or LAN.
-    expose:
-      - "4096"
-
-    volumes:
-      # Host-operator-selected workspace. OpenCode can modify everything under
-      # this root, including all nested repositories.
-      - type: bind
-        source: ${OPENCODE_WORKSPACE_PATH:-./opencode-workspace}
-        target: /workspace
-      # Host-selected global configuration. Project configuration precedence is
-      # version-dependent and must not be treated as a security boundary.
-      - type: bind
-        source: ${OPENCODE_POLICY_PATH:-./templates/opencode.json}
-        target: /etc/opencode/opencode.json
-        read_only: true
-      # Agent <-> agent file exchange; also mounted into Hermes at /exchange.
-      # The only path OpenCode is allowed to touch outside /workspace; gated
-      # by the scoped external_directory rule in templates/opencode.json.
-      - type: bind
-        source: ${AGENT_SHARED_DIR:-./exchange}
-        target: /exchange
-      - opencode_state:/home/opencode/.local/share/opencode
-
-    environment:
-      # Deliberately separate, independently revocable credentials. Do NOT
-      # reuse the Hermes keys here.
-      - ANTHROPIC_API_KEY=${OPENCODE_ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENCODE_OPENAI_API_KEY:-}
-      - OPENROUTER_API_KEY=${OPENCODE_OPENROUTER_API_KEY:-}
-      - OLLAMA_API_KEY=${OPENCODE_OLLAMA_API_KEY:-}
-      - OPENCODE_MODEL=${OPENCODE_MODEL:-}
-      # Verify that your pinned image version honours these before relying on
-      # them. The internal network is the boundary that actually holds.
-      - OPENCODE_SERVER_USERNAME=${OPENCODE_SERVER_USERNAME:-hermes}
-      - OPENCODE_SERVER_PASSWORD=${OPENCODE_SERVER_PASSWORD:-}
-
-    cap_drop: ["ALL"]
-    security_opt:
-      - no-new-privileges:true
-    tmpfs:
-      - /tmp
-    # No extra_hosts entry: unlike Hermes, OpenCode gets no route back to host
-    # services. A read_only root filesystem is the next hardening step once the
-    # image's writable paths are confirmed.
-
-    networks:
-      - agent_control
-      - model_egress
-
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: "2.0"
-          pids: 256
-
-  # ---------------------------------------------------------------------------
-  # mcp-proxy — scoped bridge to host-side MCP servers (Godot, Blender).
-  #
-  # The Blender/Godot editors and their MCP servers must run on the host (they
-  # talk to the GUI editors over localhost sockets). This tiny socat container
-  # is the ONLY thing granted a route to host.docker.internal — Hermes and
-  # OpenCode stay un-granted, matching the posture at the top of this file.
-  #
-  # It lives on hermes_egress (NOT agent_control, which is internal: true and
-  # has no route to the host). Hermes is on hermes_egress, so it reaches the
-  # proxy as http://mcp-proxy:<port>. OpenCode deliberately gets no host route
-  # and so cannot reach this proxy — only Hermes drives the MCP servers.
-  #
-  # Before this proxy can forward, run the MCP servers on the host bound to
-  # 127.0.0.1, e.g.:
-  #     godot-mcp   (HTTP)        →  http://127.0.0.1:9090
-  #     blender-mcp (stdio → HTTP via supergateway) →  http://127.0.0.1:9876
-  # Then set mcp_servers.godot.url / mcp_servers.blender.url in
-  # hermes-data/config.yaml to http://mcp-proxy:<port>.
-  # ---------------------------------------------------------------------------
-  mcp-proxy:
-    image: alpine/socat
-    container_name: hermes-mcp-proxy
-    restart: unless-stopped
-    # Forward fixed ports on the hermes_egress side to the same ports on the
-    # host loopback. socat stays in the foreground; one process per port.
-    # (alpine/socat's default entrypoint is `socat` itself, so we override
-    # the entrypoint to `sh -c` to run two socat processes in the background.)
-    entrypoint: ["sh", "-c"]
-    command: ["socat TCP-LISTEN:9090,fork,reuseaddr TCP:host.docker.internal:9090 & socat TCP-LISTEN:9876,fork,reuseaddr TCP:host.docker.internal:9876"]
-    # Scoped to THIS container only — Hermes and OpenCode never get this.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - hermes_egress
-    deploy:
-      resources:
-        limits:
-          memory: 64M
-          cpus: "0.5"
-          pids: 32
 
 networks:
-  # internal: true means no gateway to the outside world. This is what keeps
-  # the OpenCode control API off the host and the LAN.
-  agent_control:
-    internal: true
   hermes_egress: {}
-  # Direct egress. Compose networks cannot express hostname allowlists, so for
-  # a strict private-build profile replace this with a dual-homed egress
-  # gateway that only permits your chosen provider endpoints.
-  model_egress: {}
-
-volumes:
-  opencode_state: {}
-
