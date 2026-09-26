@@ -55,8 +55,8 @@ services:
     # would expose every 127.0.0.1 service on your host (databases, local
     # LLMs, admin panels, cloud credential helpers) to the container. If you
     # genuinely need Hermes to reach a specific host service (e.g. a
-    # local Ollama), prefer a scoped TCP proxy container on a dedicated
-    # network rather than re-adding a broad host-gateway route.
+    # local Ollama), add a scoped TCP proxy container like blender-bridge
+    # below rather than re-adding a broad host-gateway route here.
     ports:
       # Loopback-only by default; set HERMES_API_SERVER_HOST=0.0.0.0 to expose.
       - "127.0.0.1:8642:8642"   # OpenAI-compatible API (loopback by default)
@@ -147,6 +147,40 @@ services:
 
     networks:
       - hermes_egress
+
+  # ---------------------------------------------------------------------------
+  # blender-bridge — scoped bridge to a single host-side MCP server.
+  #
+  # The Blender editor and its MCP server run on the host (they talk to the
+  # GUI editor over localhost sockets). This tiny socat container is the ONLY
+  # thing granted a route to host.docker.internal — Hermes stays un-granted
+  # and can reach the host service only through this bridge, on this one port.
+  #
+  # It lives on hermes_egress alongside Hermes, so Hermes reaches it as
+  # http://blender-bridge:9876. For a stdio blender-mcp server, wrap it with
+  # a stdio→HTTP bridge (e.g. supergateway) bound to 127.0.0.1:9876 on the
+  # host. Then set mcp_servers.blender.url in hermes-data/config.yaml to
+  # http://blender-bridge:9876.
+  # ---------------------------------------------------------------------------
+  blender-bridge:
+    image: alpine/socat
+    container_name: hermes-blender-bridge
+    restart: unless-stopped
+    # Forward one fixed port on the hermes_egress side to the same port on
+    # the host loopback. socat stays in the foreground.
+    entrypoint: ["sh", "-c"]
+    command: ["socat TCP-LISTEN:9876,fork,reuseaddr TCP:host.docker.internal:9876"]
+    # Scoped to THIS container only — Hermes never gets this.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - hermes_egress
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: "0.5"
+          pids: 32
 
 networks:
   hermes_egress: {}
